@@ -55,9 +55,9 @@ public:
       string SPECI;
       double MSPEC;
       double ESPEC;
-      map<string,int> ATOMS;
       vector<int> Is;
       vector<int> Os;
+      map<string, int > atoms;
    };
 
    _SPES * SPES;
@@ -136,7 +136,6 @@ public:
 
    UModel();
 
-   bool initATOMS();
    /** 
    * @brief 
    * @param index    
@@ -151,6 +150,7 @@ public:
    * @pre fspecs exist under search path, default "./"
    */
    bool initSPECS(string fspecs) throw(UException); ///< read species to be take into acount, and set initial abuandance.
+   bool initATOMS();
    bool initRATES(string fratea) throw(UException); ///< read reaction rate file 
    bool initYDOT() throw(UException); ///< relate each specie(s) to reaction(s).
    bool createYDOTFile(string s) throw(UException);///< create file "Uode.cpp", which contain defination of YDOT(...)

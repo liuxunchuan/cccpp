@@ -8,7 +8,8 @@
 #include<cmath>
 #include<exception>
 #include   <stdlib.h>             
-#include   <string.h> 
+#include   <string.h>
+#include <regex> 
 #include"UModel.h"
 
 using namespace std;
@@ -80,8 +81,6 @@ UModel::~UModel(){
 
 }
 
-bool UModel::initATOMS(){}
-
 bool UModel::initSPECS(string s)  throw(UException){
    ifstream fspec;
    fspec.open(s);
@@ -126,6 +125,33 @@ bool UModel::initSPECS(string s)  throw(UException){
     }
    }  
    return true;
+}
+
+bool UModel::initATOMS(){
+   regex atom_regex("([A-Z][a-z]*)([0-9]*)");
+   for(int i=0; i<this->NSPECS;i++){
+      string SPECI = this->SPES[i].SPECI;
+      size_t found = SPECI.find("_");
+      if(found!=string::npos) SPECI = SPECI.substr(0,found);
+      std::smatch m;
+      sregex_iterator it=sregex_iterator(SPECI.begin(),SPECI.end(), atom_regex);
+      sregex_iterator itend=sregex_iterator();
+      while(it!=itend){
+         smatch match = *it;
+         int N = 1; //default 1
+         if(match[2]!=""){
+            istringstream sin(match[2]);
+            sin >> N;
+         }
+         map<string,int>::iterator ait = this->SPES[i].atoms.find(match[1]);
+         if(ait == this->SPES[i].atoms.end()){
+            this->SPES[i].atoms.insert(map<string,int>::value_type(match[1],N));
+         }else{
+            ait->second+=N;
+         }
+         ++it;
+      }      
+   }
 }
 
 bool UModel::initRATES(string s) throw(UException){
@@ -226,8 +252,8 @@ bool UModel::createYDOTFile(string s) throw(UException){
           count = 1;
           fout << "   Y["<<N<<"]=TOTAL["<<i<<"]-0.5*(0.0";
           for( j=0;j<this->NSPECS;j++){
-             map<string,int>::iterator it = this->SPES[j].ATOMS.find("H");
-             if(it != this->SPES[j].ATOMS.end()){
+             map<string,int>::iterator it = this->SPES[j].atoms.find("H");
+             if(it != this->SPES[j].atoms.end()){
                 fout<<"+"<<it->second<<"*Y["<<j<<"]";
                 count=++count%countMax;
                 if(count==0) fout<<"\n      ";   
@@ -339,7 +365,7 @@ inline double UModel::AUV(double NH){
 }
 
 inline double UModel::NH(double t){
-   return 4.675e+21*2;
+   return 4.675e+21*2;  //to value AV as 5
 }
 
 inline double UModel::nH(double t){
@@ -392,17 +418,17 @@ bool UModel::run(){
       if(++dex%50==0) cout << dex<<"\t"<<"T:  "<<this->ODEPAR.T<<endl;
       this->ODESOLVER();
       this->ODEPAR.TOUT*=1.02;
-      for(int i=0; i<this->NSPECS;i++)this->abuns[i][dex] = this->ODEPAR.Y[i];
+      for(int i=0; i<this->NSPECS+this->NCONS;i++)this->abuns[i][dex] = this->ODEPAR.Y[i];
       this->times[dex] = this->ODEPAR.T;
    }
  
    ofstream fout("Uout.csv");
    fout << "TIME,";
-   for(int j=0; j<this->NSPECS;j++) fout << this->SPES[j].SPECI<<",";
+   for(int j=0; j<this->NSPECS+this->NCONS;j++) fout << this->SPES[j].SPECI<<",";
    fout<<endl;
    for(int i=1;i<=dex;i++){
       fout << this->times[i]<<",";
-      for(int j=0; j<this->NSPECS;j++){
+      for(int j=0; j<this->NSPECS+this->NCONS;j++){
          fout<<this->abuns[j][i]<<",";
       }
       fout<<endl;
@@ -414,7 +440,11 @@ bool UModel::test(){
    for(int i=0;i<this->NSPECS+this->NCONS;i++){
       cout <<  this->SPES[i].SPECI<<'\t'<<this->SPES[i].MSPEC<<'\t'<< this->SPES[i].ESPEC <<"\t";
       cout << this->SPES[i].Is.size()<<"\t"<<this->SPES[i].Os.size()<<endl;
+      for(map<string,int>::iterator it=this->SPES[i].atoms.begin(); it!=this->SPES[i].atoms.end();it++)
+         cout << it->first <<"\t"<< it->second<<"\t";
+      cout<<endl;
    }
+/*
    for(int i=0;i<this->NREAC;i++){
       if(this->REAC[i].TINT[0]>30 && this->REAC[i].GAM[0]<0.0){
         cout<<i<<":   "<<this->REAC[i].type<<":   ";
@@ -427,6 +457,7 @@ bool UModel::test(){
         cout<<endl;
       }
    }
+*/
    
    return true;
 }

@@ -6,6 +6,7 @@ int main(){
    UModel u;
 
    u.initSPECS("gasrun.specs");
+   u.initATOMS();
    u.initRATES("gasrun.rates");
    u.initYDOT();
    //u.createYDOTFile("temp.cpp");
