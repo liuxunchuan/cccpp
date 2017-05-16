@@ -198,7 +198,6 @@ bool UModel::initRATES(string s) throw(UException){
              else this->REAC[N].R[i] = it->second;
          }
       }
-
       line = line.substr(dex,line.length()-dex);
       istringstream sin(line);
       FilterCharacter filter(":");
@@ -458,7 +457,7 @@ bool UModel::test(){
    }
 */
    
-   return true;
+   return true;;
 }
 
 
