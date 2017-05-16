@@ -203,7 +203,6 @@ bool UModel::initRATES(string s) throw(UException){
       istringstream sin(line);
       FilterCharacter filter(":");
       sin.imbue(locale(locale(), &filter));
-     
 
       sin>>n;
       this->REAC[N].NTR = n;
