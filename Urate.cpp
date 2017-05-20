@@ -87,14 +87,14 @@ void DIFF(int* N,double* T,double *Y, double *YDOT, double *RPAR, int*IPAR){
    double *K,F,D;
     K = ptr->TCV.K;
    ptr->RATES(*T);
-   auto ACC = ptr->ACC;
-   auto DCC = ptr->DCC;
 
    int Ns = ptr->GAS.NSPES;
    int Ni=-1;
+
    for(int i=0; i<Ns;i++){
       Ni=i;
       YDOT[i] = 0;
+      continue;
       for(int rx : ptr->GAS.SPES[i].Is){
 
          int r1 = ptr->GAS.REAC[rx].Ri[0];
@@ -104,33 +104,34 @@ void DIFF(int* N,double* T,double *Y, double *YDOT, double *RPAR, int*IPAR){
          if(r1==Ns+1) r1=(*N)+1;
          if(r2==Ns) r2=*N;
          if(r2==Ns+1) r2=(*N)+1;
-         if( ptr->GAS.REAC[rx].type!=0)
+         if( ptr->GAS.REAC[rx].type!=0){
             YDOT[i] -= K[rx]*Y[r1];
-         else
+         }
+         else{
             YDOT[i] -= K[rx]*Y[r1]*Y[r2]*nH;
+         }
       }
-      for(int rx : ptr->GAS.SPES[i].Os){;
+      for(int rx : ptr->GAS.SPES[i].Os){
          int r1 = ptr->GAS.REAC[rx].Ri[0];
          int r2 = ptr->GAS.REAC[rx].Ri[1];
          if(r1==Ns) r1=*N;
-         if(r1==Ns+1) r1=(*N)+2;
+         if(r1==Ns+1) r1=(*N)+1;
          if(r2==Ns) r2=*N;
-         if(r2==Ns+1) r2=(*N)+2;
+         if(r2==Ns+1) r2=(*N)+1;
          if( ptr->GAS.REAC[rx].type!=0)
-            YDOT[i] +=K[rx]*Y[r1];
+            YDOT[i] +=  K[rx]*Y[r1];
          else
             YDOT[i] += K[rx]*Y[r1]*Y[r2]*nH;
       }
-      //cout<<YDOT[Ni]<<endl;
    }
-   while(Ni<(*N)) YDOT[Ni++]=0;
+   while(++Ni<(*N)) YDOT[Ni]=0;
 
-   for(int i=0; i<600;i++)if(YDOT[i]>1.E-15) YDOT[i]=1.E-15;
-   for(int i=0; i<600;i++)if(YDOT[i]<-1.E-15) YDOT[i]=1.E-15;
+   //for(int i=0; i<600;i++)if(YDOT[i]>1.E-15) YDOT[i]=1.E-15;
+   //for(int i=0; i<600;i++)if(YDOT[i]<-1.E-15)YDOT[i]=1.E-15;
    //for(int i=0; i<600;i++)if(YDOT[i]==0.)  YDOT[i]=1.E-15;
    //for(int i=0; i<600;i++)if(YDOT[i] != 1.E-15) cout<<"crazy!"<<endl;
 
-   Y[761]=TOTAL[0]-0.5*(0.0+1*Y[0]+1*Y[1]+1*Y[2]+2*Y[3]+3*Y[4]
+   Y[*N]=TOTAL[0]-0.5*(0.0+1*Y[0]+1*Y[1]+1*Y[2]+2*Y[3]+3*Y[4]
       +1*Y[7]+1*Y[11]+1*Y[12]+1*Y[13]+2*Y[14]+2*Y[15]
       +3*Y[18]+3*Y[19]+1*Y[20]+1*Y[21]+4*Y[22]+4*Y[23]
       +2*Y[24]+2*Y[25]+5*Y[29]+3*Y[30]+3*Y[31]+1*Y[32]
@@ -222,7 +223,7 @@ void DIFF(int* N,double* T,double *Y, double *YDOT, double *RPAR, int*IPAR){
       +4*Y[737]+4*Y[741]+3*Y[743]+1*Y[744]+1*Y[745]+2*Y[746]
       +2*Y[748]+3*Y[750]+6*Y[751]+4*Y[753]+3*Y[754]+2*Y[755]
       +3*Y[756]+3*Y[757]+2*Y[759]+3*Y[760]);
-   Y[762]=TOTAL[1]+1*Y[1]-1*Y[2]+1*Y[3]+1*Y[4]+1*Y[6]
+   Y[(*N)+1]=TOTAL[1]+1*Y[1]-1*Y[2]+1*Y[3]+1*Y[4]+1*Y[6]
       +1*Y[7]+1*Y[9]-1*Y[10]+1*Y[12]-1*Y[13]+1*Y[15]
       +1*Y[17]+1*Y[19]+1*Y[21]+1*Y[23]+1*Y[25]+1*Y[27]
       -1*Y[28]+1*Y[29]+1*Y[31]+1*Y[33]-1*Y[34]+1*Y[36]

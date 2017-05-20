@@ -15,9 +15,10 @@ int main(){
 
    u.initDOT();
    u.initYDOT();
+   //u.createDOTFile("temp1.cpp");
    //u.createYDOTFile("temp.cpp");
    //u.test();
-   //u.run();
+   u.run();
    //for(int i=0; i<u.NSPECS;i++) cout<< u.Y[i]<<endl;
    //return 0;
 }

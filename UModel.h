@@ -86,8 +86,13 @@ public:
       map<string, int > atoms;
    };
    _FSPES * FSPES;
-   typedef _FSPES _SPES;
-   //typedef _SPES _DSPES;
+   
+   class _SPES:public _FSPES{
+   public:
+      double _d1;
+      int _i1;
+      int _i2;
+   };
    class _DSPES:public _FSPES{
    public:
       double Eb;
@@ -215,6 +220,7 @@ public:
    bool initDUST(int N=1);
    bool initATOMS();
    bool initDOT();
+   bool createDOTFile(string s);
    bool initYDOT() throw(UException); ///< relate each specie(s) to reaction(s).
    bool createYDOTFile(string s) throw(UException);///< create file "Uode.cpp", which contain defination of YDOT(...)
 

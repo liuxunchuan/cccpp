@@ -225,10 +225,10 @@ bool UModel::initGAS(){
    this->GAS.SPES = new UModel::_SPES[1000];
    for(int i=0; i<this->NSPECS;i++)
       if(this->FSPES[i].PHASE=="")
-         this->GAS.SPES[N++] = this->FSPES[i];
+         *((UModel::_FSPES*) &(this->GAS.SPES[N++])) = this->FSPES[i];
    this->GAS.NSPES = N;
    this->GAS.NCONS = this->NCONS;
-   for(int i=0; i<this->NCONS;i++) this->GAS.SPES[N+i] = this->FSPES[this->NSPECS+i];
+   for(int i=0; i<this->NCONS;i++) *((UModel::_FSPES*) &(this->GAS.SPES[N+i])) = this->FSPES[this->NSPECS+i];
    this->GAS.REAC = new UModel::_REAC[10000];
    N = 0;
    for(int i=0; i<this->NREAC;i++)
@@ -377,48 +377,54 @@ bool UModel::createDOTFile(string s){
       }
    }
 
-   map<string, int> smap;
-   for(int i=0;i<this->NSPECS+this->NCONS;i++){
-      string SPECI =  this->FSPES[i].SPECI;
-      string PHASE =  this->FSPES[i].PHASE;
-      if(PHASE == "") smap.insert(map<string,int>::value_type(SPECI,i));
-      else smap.insert(map<string,int>::value_type(SPECI+"_"+PHASE,i));
-   }
+  int NTOTAL=this->GAS.NSPES;
+  for(int i=0;i<this->NDUST;i++)
+     NTOTAL+=this->DUST[i].NSPES;
+  
+  cout << NTOTAL<<" "<<1+this->NDUST<<endl;
 
-
-
-  int initN = 0;
+  int initN = 0, initRN = 0;
   for(int id=0; id<1+this->NDUST;id++){
-   int NSPES, NCONS,NDSS;
-   UModel::_SPES SPES;
-   UModel::_REAC REAC;
-   UModel::_DSS  DSS;
+   int NSPES, NCONS,NDSS,NREAC;
+   UModel::_SPES* SPES;
+   UModel::_REAC* REAC;
+   UModel::_DSS*  DSS;
    if(id==0){
-      SPES = this->GAS.SPES;
+      SPES = (UModel::_SPES*)(this->GAS.SPES);
       REAC = this->GAS.REAC;
       NSPES = this->GAS.NSPES;
-      NCONS = tis->GAS.NCONS;
+      NCONS = this->GAS.NCONS;
+      NREAC = this->GAS.NREAC;
+      
    }else{
       initN += NSPES;
-      SPES = this->DUST[id-1].SPES;
+      initRN += NREAC;
+      SPES = (UModel::_SPES*)(this->DUST[id-1].SPES);
       REAC = this->DUST[id-1].REAC;
       DSS = this->DUST[id-1].DSS;
       NSPES = this->DUST[id-1].NSPES;
-      NCONS = tis->DUST[id-1].NCONS;      
+      NCONS = 0;      
       NDSS  = this->DUST[id-1].NDSS;
+      NREAC = this->DUST[id-1].NREAC;
    }
 
-   for( i=0; NSPECS;i++){
+   for( i=0; i<NSPES;i++){
       count = 1;
       fout << "   F=0.0";
-      for(auto j : FSPES[i].Os){
-         string SPECI1 = REAC[j].R[0];
-         string SPECI2 = REAC[j].R[1];
-         if ((it=smap.find(SPECI1))!=smap.end()) r1 = it->second;
-         if ((it=smap.find(SPECI2))!=smap.end()) r2 = it->second;
-         if(this->FREAC[j].type == 1 || this->FREAC[j].type == 2 || this->FREAC[j].type == 3 )
-            fout << "+K["<<j<<"]*Y["<<r1<<"]";
-         else fout << "+K["<<j<<"]*Y["<<r1<<"]*Y["<<r2<<"]*nH";
+
+      for(auto j : SPES[i].Os){
+         r1 = REAC[j].Ri[0];
+         if(r1!=9999 && r1>=NSPES)
+            if(r1<NSPES+NCONS) r1= r1-NSPES+NTOTAL;
+            else cout << "can not find specie:  "<<REAC[j].R[0]<<endl;
+         r2 = REAC[j].Ri[1];
+         if(r2!=9999 && r2>=NSPES)
+            if(r2<NSPES+NCONS) r2= r2-NSPES+NTOTAL;
+            else cout << "can not find specie:  "<<REAC[j].R[1]<<endl;
+
+         if(REAC[j].type == 1 || REAC[j].type == 2 || REAC[j].type == 3 )
+            fout << "+K["<<j+initRN<<"]*Y["<<r1+initN<<"]";
+         else fout << "+K["<<j+initRN<<"]*Y["<<r1+initN<<"]*Y["<<r2+initN<<"]*nH";
          count=++count%countMax;
          if(count==0) fout<<"\n      ";
       }
@@ -426,45 +432,23 @@ bool UModel::createDOTFile(string s){
 
       count = 1;
       fout << "   D=0.0";
-      for(auto j : this->FSPES[i].Is){
-         string SPECI1 = this->FREAC[j].R[0];
-         string SPECI2 = this->FREAC[j].R[1];
-         if(this->FSPES[i].PHASE != ""){
-            SPECI1 = SPECI1+"_"+this->FSPES[i].PHASE;
-            SPECI2 = SPECI2+"_"+this->FSPES[i].PHASE;
-         }
-         if ((it=smap.find(SPECI1))!=smap.end()) r1 = it->second;
-         if ((it=smap.find(SPECI2))!=smap.end()) r2 = it->second;
+      for(auto j : SPES[i].Is){
+         r1 = REAC[j].Ri[0];
+         if(r1!=9999 && r1>=NSPES)
+            if(r1<NSPES+NCONS) r1= r1-NSPES+NTOTAL;
+            else cout << "can not find specie:  "<<REAC[j].R[0]<<endl;
+         r2 = REAC[j].Ri[1];
+         if(r2!=9999 && r2>=NSPES)
+            if(r2<NSPES+NCONS) r2= r2-NSPES+NTOTAL;
+            else cout << "can not find specie:  "<<REAC[j].R[1]<<endl;
          if(REAC[j].type == 1 || REAC[j].type == 2 || REAC[j].type == 3 )
-            fout << "+K["<<j<<"]*Y["<<r1<<"]";
-         else fout << "+K["<<j<<"]*Y["<<r1<<"]*Y["<<r2<<"]*nH";
+            fout << "+K["<<j+initRN<<"]*Y["<<r1+initN<<"]";
+         else fout << "+K["<<j+initRN<<"]*Y["<<r1+initN<<"]*Y["<<r2+initN<<"]*nH";
          count=++count%countMax;
          if(count==0) fout<<"\n      ";     
       }
       fout <<";\n";
-      fout <<"   YDOT["<<i<<"]=F-D";
-      if(this->FSPES[i].PHASE==""){//gas phase
-         for(int j=0; j<this->NDUST;j++){
-            map<string,int>::iterator it = smap.find(this->FSPES[i].SPECI+"_"+this->DUST[j].name);
-            int k = -1;
-            while(++k<this->DUST[j].NDSS)
-               if(this->DUST[j].DSS[k].SPECI == this->FSPES[i].SPECI) break;
-            if(it != smap.end() and k<this->DUST[j].NDSS){
-               fout<<"-ACC["<<j<<"]["<<k<<"]*"<<"Y["<<i<<"]";
-               fout<<"+DCC["<<j<<"]["<<k<<"]*"<<"Y["<<it->second<<"]";
-            }
-
-         }
-      }else{
-         int NDust=-1,NDss=-1,Nspe=-1;
-         while(++NDust<this->NDUST) if(this->DUST[NDust].name == this->FSPES[i].PHASE) break;
-         while(++NDss<this->DUST[NDust].NDSS) if(this->DUST[NDust].DSS[NDss].SPECI ==  this->FSPES[i].SPECI) break;
-         map<string,int>::iterator it = smap.find(this->FSPES[i].SPECI);
-         if(NDust<this->NDUST and NDss<this->DUST[NDust].NDSS and it!=smap.end()){
-            fout<<"+ACC["<<NDust<<"]["<<NDss<<"]*Y["<<it->second<<"]";
-            fout<<"-DCC["<<NDust<<"]["<<NDss<<"]*Y["<<i<<"]";
-         } 
-      }
+      fout <<"   YDOT["<<i+initN<<"]=F-D";
       fout<<";\n";
    }
   }
@@ -611,6 +595,7 @@ bool UModel::createYDOTFile(string s) throw(UException){
       }
       fout <<";\n";
       fout <<"   YDOT["<<i<<"]=F-D";
+      /*
       if(this->FSPES[i].PHASE==""){//gas phase
          for(int j=0; j<this->NDUST;j++){
             map<string,int>::iterator it = smap.find(this->FSPES[i].SPECI+"_"+this->DUST[j].name);
@@ -633,6 +618,7 @@ bool UModel::createYDOTFile(string s) throw(UException){
             fout<<"-DCC["<<NDust<<"]["<<NDss<<"]*Y["<<i<<"]";
          } 
       }
+      */
       fout<<";\n";
    }
 
@@ -659,7 +645,7 @@ bool UModel::run(){
    this->ODEPAR.Y = this->Y;
    this->ODEPAR.DIF = DIFF; //YDOTF; //
    this->ODEPAR.JAC = FAKEJAC;
-   this->ODEPAR.NEQ = NTOT;    
+   this->ODEPAR.NEQ = NTOT;
    this->ODEPAR.LIW =   NTOT + 30    +100;
    this->ODEPAR.IWORK = new int[this->ODEPAR.LIW];
    this->ODEPAR.LRW = 22 + (9*NTOT) + (2*(NTOT*NTOT));
@@ -697,12 +683,20 @@ bool UModel::run(){
 }
 
 bool UModel::test(){
+/*
    for(int i=0; i<this->NDUST;i++)
-      for(int j=0; j<this->DUST[i].NSPES;j++)
-         cout << this->DUST[i].SPES[j].SPECI<<"\t"
-              << this->DUST[i].SPES[j].Eb<<"\t"
-              << this->DUST[i].SPES[j].Is.size()<<"\t"
-              << this->DUST[i].SPES[j].Os.size()<<"\t"
-              <<endl;     
+      for(int j=0; j<this->DUST[i].NSPES;j++){
+         cout<<j<<"\t"<<this->DUST[i].SPES[j].Os.size()<<"\t";
+         for(int k=0; k<this->DUST[i].SPES[j].Os.size();k++)
+            cout<<this->DUST[i].SPES[j].Os[k]<<"\t";
+         cout<<endl<<endl; 
+      }
+ */
+      for(int j=0; j<this->GAS.NSPES;j++){
+         cout<<j<<"\t"<<this->GAS.SPES[j].Os.size()<<"\t";
+         for(int k=0; k<this->GAS.SPES[j].Os.size();k++)
+            cout<<this->GAS.SPES[j].Os[k]<<"\t";
+         cout<<endl<<endl; 
+      }
    return true;
 }
