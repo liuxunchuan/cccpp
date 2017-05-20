@@ -63,29 +63,27 @@ void dvode_(void (*F)(int* N,double* T,double *Y, double *YDOT, double *RPAR, in
 }
 #endif
 
-void YDOT(int* N,double* T,double *Y, double *YDOT, double *RPAR, int*IPAR);
-
-UModel::UModel(){
-   this->SPES = new UModel::_SPES[1000];
-   this->REAC = new UModel::_REAC[10000];
+UModel::UModel(){  
+   
+   this->ACC  = new double[10][1000];
+   this->DCC  = new double[10][1000];
    this->abuns = new double[1000][1000];
    this->TCV.K = new double[10000];
-   if(! this->abuns or !this->REAC or !this->SPES or !this->TCV.K) cout<<"malloc error!";
-   this->initATOMS();
 }
 
 UModel::~UModel(){
-   delete [] this->SPES;
-   delete [] this->REAC;
+   delete [] this->FSPES;
+   delete [] this->FREAC;
    delete this->abuns;
 
 }
 
-bool UModel::initSPECS(string s)  throw(UException){
+bool UModel::readSPECS(string s)  throw(UException){
+   this->FSPES = new UModel::_FSPES[1000];
    ifstream fspec;
    fspec.open(s);
-   string line, spec;
-   int dex, I, block=0;
+   string line, spec, SPECI, PHASE;
+   int dex, I, block=0, pos;
    double abun;
 
    if(!fspec) throw UException("can not open .specs file!");
@@ -98,13 +96,21 @@ bool UModel::initSPECS(string s)  throw(UException){
       if (line.substr(0,3) == "NUM") continue;
       istringstream sin(line);
       I = this->NSPECS;
-      sin >> dex >>  this->SPES[I].SPECI >> this->SPES[I].MSPEC>> this->SPES[I].ESPEC;    
+      sin >> dex >>  SPECI >> this->FSPES[I].MSPEC>> this->FSPES[I].ESPEC;    
+      pos = SPECI.find("_");
+      if(pos==string::npos) PHASE = "";
+      else{
+         PHASE = SPECI.substr(pos+1);
+         SPECI = SPECI.substr(0,pos);
+      }
+      this->FSPES[I].SPECI = SPECI;
+      this->FSPES[I].PHASE = PHASE;
       (this->NSPECS)++;
     }
     if(block==1){
       I = this->NSPECS+this->NCONS;
       istringstream sin(line);
-      sin >> dex >> this->SPES[I].SPECI >> this->TOTAL[this->NCONS] >>this->SPES[I].MSPEC>> this->SPES[I].ESPEC; 
+      sin >> dex >> this->FSPES[I].SPECI >> this->TOTAL[this->NCONS] >>this->FSPES[I].MSPEC>> this->FSPES[I].ESPEC; 
       this->NCONS++;
     } 
     if(block==2){
@@ -113,7 +119,7 @@ bool UModel::initSPECS(string s)  throw(UException){
 
       dex = 0;
       for(int i=0; i<this->NSPECS; i++){
-         if(this->SPES[i].SPECI.compare(spec)==0){
+         if(this->FSPES[i].SPECI.compare(spec)==0){
             this->Y[i] = abun;
             this->abuns[i][0] = abun;
             dex = 1;
@@ -127,10 +133,70 @@ bool UModel::initSPECS(string s)  throw(UException){
    return true;
 }
 
+bool UModel::readDSS(string f) throw(UException){
+   this->FDSS  = new UModel::_FDSS[1000];
+   ifstream fin(f);
+   string line;
+   int N=0;
+   while(getline(fin,line)){
+      istringstream sin(line);
+      sin>>this->FDSS[N].SPECI>>this->FDSS[N].Eb>>this->FDSS[N].M>>this->FDSS[N].E>>this->FDSS[N].i1>>this->FDSS[N].i2;
+      this->NDSS=++N;     
+   }
+   return true;
+}
+
+bool UModel::readRATES(string s) throw(UException){
+   this->FREAC = new UModel::_FREAC[10000];
+   ifstream frate;
+   frate.open(s);
+   string line, temps, re[8];
+   int dex=0,dex1,n=0,N;
+   double ALF,BET,GAM,TINT,TEND;
+
+   if(!frate) throw UException("can not open .rate file!");
+   while(getline(frate,line)){
+      N = this->NREAC;
+
+      dex=0;
+      for(int i=0; i<8;i++){
+         dex1 = line.find(':',dex);
+         re[i] = line.substr(dex,dex1-dex);
+         dex=dex1+1;
+      }
+      if(re[1]=="CP") this->FREAC[N].type = 1;
+      else if(re[1]=="CR") this->FREAC[N].type = 2;
+      else if(re[1]=="PH") this->FREAC[N].type = 3;
+      else if(re[1]=="GNN")  this->FREAC[N].type = 10;
+      else this->FREAC[N].type = 0;
+
+      this->FREAC[N].good = true;
+      for(int i=0;i<6;i++){
+         this->FREAC[N].R[i]=re[i+2];
+      }
+      line = line.substr(dex,line.length()-dex);
+      istringstream sin(line);
+      FilterCharacter filter(":");
+      sin.imbue(locale(locale(), &filter));
+
+      sin>>n;
+      this->FREAC[N].NTR = n;
+      for(int j=0; j<n;j++){
+         sin >> ALF>>BET>>GAM>>TINT>>TEND>>temps>>temps>>temps>>temps;
+         this->FREAC[N].ALF[j] = ALF; 
+         this->FREAC[N].BET[j] = BET;
+         this->FREAC[N].GAM[j] = GAM;
+         this->FREAC[N].TINT[j] = TINT;
+         this->FREAC[N].TEND[j] = TEND;
+      }
+      this->NREAC++;
+   }
+}
+
 bool UModel::initATOMS(){
    regex atom_regex("([A-Z][a-z]*)([0-9]*)");
    for(int i=0; i<this->NSPECS;i++){
-      string SPECI = this->SPES[i].SPECI;
+      string SPECI = this->FSPES[i].SPECI;
       size_t found = SPECI.find("_");
       if(found!=string::npos) SPECI = SPECI.substr(0,found);
       std::smatch m;
@@ -143,9 +209,9 @@ bool UModel::initATOMS(){
             istringstream sin(match[2]);
             sin >> N;
          }
-         map<string,int>::iterator ait = this->SPES[i].atoms.find(match[1]);
-         if(ait == this->SPES[i].atoms.end()){
-            this->SPES[i].atoms.insert(map<string,int>::value_type(match[1],N));
+         map<string,int>::iterator ait = this->FSPES[i].atoms.find(match[1]);
+         if(ait == this->FSPES[i].atoms.end()){
+            this->FSPES[i].atoms.insert(map<string,int>::value_type(match[1],N));
          }else{
             ait->second+=N;
          }
@@ -154,75 +220,296 @@ bool UModel::initATOMS(){
    }
 }
 
-bool UModel::initRATES(string s) throw(UException){
-   ifstream frate;
-   frate.open(s);
-   string line, temps, re[8];
-   int dex=0,dex1,n=0,N;
-   double ALF,BET,GAM,TINT,TEND;
-
-   map<string,int> smap;
-   for(int i=0; i<this->NSPECS+this->NCONS;i++)
-      smap.insert(map<string,int>::value_type(this->SPES[i].SPECI,i));
-
-   if(!frate) throw UException("can not open .rate file!");
-   while(getline(frate,line)){
-      N = this->NREAC;
-
-      dex=0;
-      for(int i=0; i<8;i++){
-         dex1 = line.find(':',dex);
-         re[i] = line.substr(dex,dex1-dex);
-         dex=dex1+1;
-      }
-      if(re[1]=="CP") this->REAC[N].type = 1;
-      else if(re[1]=="CR") this->REAC[N].type = 2;
-      else if(re[1]=="PH") this->REAC[N].type = 3;
-      else if(re[1]=="GNN")  this->REAC[N].type = 10;
-      else this->REAC[N].type = 0;
-
-      this->REAC[N].good = true;
-      for(int i=0;i<6;i++){
-         if (re[i+2]=="CRP" || re[i+2]=="CRPHOT" || re[i+2]=="PHOTON" || re[i+2]=="")
-            this->REAC[N].R[i]=9999; 
-         else if (this->REAC[N].type==10){
-             map<string,int >::iterator it =  smap.find(re[i+2]+"_G1");
-             if (it==smap.end()){
-               cout<<"can not find: "<< re[i+2]+"_G1" <<endl;
-               this->REAC[N].good = false;
-             }
-             else this->REAC[N].R[i] = it->second;
-         }else{
-             map<string, int >::iterator it =  smap.find(re[i+2]);
-             if (it==smap.end()) cout<<"can not find: "<< re[i+2]<<endl;
-             else this->REAC[N].R[i] = it->second;
+bool UModel::initGAS(){
+   int N = 0;
+   this->GAS.SPES = new UModel::_SPES[1000];
+   for(int i=0; i<this->NSPECS;i++)
+      if(this->FSPES[i].PHASE=="")
+         this->GAS.SPES[N++] = this->FSPES[i];
+   this->GAS.NSPES = N;
+   this->GAS.NCONS = this->NCONS;
+   for(int i=0; i<this->NCONS;i++) this->GAS.SPES[N+i] = this->FSPES[this->NSPECS+i];
+   this->GAS.REAC = new UModel::_REAC[10000];
+   N = 0;
+   for(int i=0; i<this->NREAC;i++)
+      if(this->FREAC[i].type!=10){
+         *((UModel::_FREAC *)(this->GAS.REAC+N)) = this->FREAC[i];
+         for(int j=0;j<6;j++){
+            string SPECI = this->GAS.REAC[N].R[j];
+            if((SPECI == "") or SPECI=="PHOTON" or SPECI=="CRPHOT" or SPECI=="CRP"){
+               this->GAS.REAC[N].Ri[j]=9999; continue;
+            }
+            int l=-1;
+            while(++l<this->GAS.NSPES+this->GAS.NCONS) if(this->GAS.SPES[l].SPECI == SPECI) break;
+            if(l==this->GAS.NSPES+this->GAS.NCONS){
+               cout<<"can not find "<< SPECI<<"  in gas"<<endl;
+               this->GAS.REAC[N].good = false;
+               break;
+            }
+            this->GAS.REAC[N].Ri[j] = l;
          }
+         N++;
       }
-      line = line.substr(dex,line.length()-dex);
-      istringstream sin(line);
-      FilterCharacter filter(":");
-      sin.imbue(locale(locale(), &filter));
+   this->GAS.NREAC = N;
+}
 
-      sin>>n;
-      this->REAC[N].NTR = n;
-      for(int j=0; j<n;j++){
-         sin >> ALF>>BET>>GAM>>TINT>>TEND>>temps>>temps>>temps>>temps;
-         this->REAC[N].ALF[j] = ALF; 
-         this->REAC[N].BET[j] = BET;
-         this->REAC[N].GAM[j] = GAM;
-         this->REAC[N].TINT[j] = TINT;
-         this->REAC[N].TEND[j] = TEND;
-      }
-      this->NREAC++;
+bool UModel::initDUST(int N){
+   this->DUST = new UModel::_DUST[N];
+   this->NDUST = N;
+   for(int i=0; i<N;i++){
+      this->DUST[i].name = "G"+to_string(i+1);
+      this->DUST[i].NDSS = this->NDSS;
+      this->DUST[i].DSS = this->FDSS;
+      this->DUST[i].SPES = new UModel::_DSPES[1000];
+      int N = 0;
+      for(int j=0; j<this->NSPECS;j++)
+         if(this->FSPES[j].PHASE==this->DUST[i].name){
+            int k=-1;
+            while(++k<this->NDSS) if(this->FDSS[k].SPECI == this->FSPES[j].SPECI ) break;
+            if(k==this->NDSS){
+               cout << "do not has binding energy for specie(set default): "<<this->FSPES[j].SPECI<<endl;
+               *((UModel::_FSPES *)(this->DUST[i].SPES+N)) = this->FSPES[j];// be careful about copy of vector/map number!
+               this->DUST[i].SPES[N].Eb = 9999.0;
+               this->DUST[i].SPES[N].i1 = 0;
+               this->DUST[i].SPES[N].i2 = 0;;
+               N++;
+               continue;
+            }
+            *((UModel::_FSPES *)(this->DUST[i].SPES+N)) = this->FSPES[j];// be careful about copy of vector/map number!
+            this->DUST[i].SPES[N].Eb = this->FDSS[k].Eb;
+            this->DUST[i].SPES[N].i1 = this->FDSS[k].i1;
+            this->DUST[i].SPES[N].i2 = this->FDSS[k].i2;
+            N++;
+            //this->DUST[i].SPES[N++] = this->FSPES[j];
+         }
+      this->DUST[i].NSPES = N;
+      this->DUST[i].REAC = new UModel::_REAC[10000];
+      N = 0;
+      for(int j=0; j<this->NREAC;j++)
+         if(this->FREAC[j].type==10){
+            //shallow copy
+            *((UModel::_FREAC *)(this->DUST[i].REAC+N)) = this->FREAC[j];
+            //::memcpy(this->DUST[i].REAC+N, this->FREAC+j, sizeof(UModel::_FREAC));
+            for(int k=0; k<6;k++){
+               string SPECI = this->DUST[i].REAC[N].R[k];
+               if(SPECI==""){this->DUST[i].REAC[N].Ri[k]=9999;continue;}; 
+               int l = -1;
+               while(++l<this->DUST[i].NSPES) if(this->DUST[i].SPES[l].SPECI == SPECI) break;
+               if(l==this->DUST[i].NSPES){
+                  cout<<"can not find "<< SPECI<<"  in dust"<<this->DUST[i].name<<endl;
+                  this->DUST[i].REAC[N].good = false;
+                  break;
+               }
+               this->DUST[i].REAC[N].Ri[k] = l;
+            }
+            N++;
+         }
+      this->DUST[i].NREAC = N;
    }
 }
 
+bool UModel::initDOT(){
+   for(int i=0; i<this->GAS.NREAC;i++)
+      if(this->GAS.REAC[i].good)
+         for(int j=0;j<6;j++)
+            if(this->GAS.REAC[i].Ri[j]!=9999)
+               if(j<2)this->GAS.SPES[this->GAS.REAC[i].Ri[j]].Is.push_back(i);
+               else this->GAS.SPES[this->GAS.REAC[i].Ri[j]].Os.push_back(i);
+   for(int k=0; k<this->NDUST;k++){
+    for(int i=0; i<this->DUST[k].NREAC;i++)
+      if(this->DUST[k].REAC[i].good)
+         for(int j=0;j<6;j++)
+            if(this->DUST[k].REAC[i].Ri[j]!=9999)
+               if(j<2)this->DUST[k].SPES[this->DUST[k].REAC[i].Ri[j]].Is.push_back(i);
+               else this->DUST[k].SPES[this->DUST[k].REAC[i].Ri[j]].Os.push_back(i);   
+   }
+}
+
+bool UModel::createDOTFile(string s){
+   ofstream fout(s);
+   string SPECI;
+   int N, i,j,r1,r2;
+   int count, countMax=6;
+   map<string,int>::iterator it;
+   if(!fout) throw UException("can not open: "+s);
+   fout << "#include\"UModel.h\"\n";
+   fout << "#include<string.h>\n";
+   fout << "void YDOT(int* N,double* T,double *Y, double *YDOT, double *RPAR, int*IPAR){\n";
+   fout << "   UModel *ptr;\n";
+   fout << "   ::memcpy(&ptr,IPAR,4);\n";
+   fout << "   ::memcpy(((void*)(&ptr))+4,((void*)(IPAR))+4,4);\n";
+   fout << "   double *TOTAL=ptr->TOTAL;\n";
+   fout << "   double nH = ptr->TCV.nH;\n";
+   fout << "   double *K,F,D;\n";
+   fout <<"    K = ptr->TCV.K;\n";
+   fout << "   ptr->RATES(*T);\n";
+
+   for(i=0; i<this->NCONS;i++){
+      N = this->NSPECS+i;
+      SPECI = this->FSPES[N].SPECI;
+      if (SPECI=="H2"){
+          count = 1;
+          fout << "   Y["<<N<<"]=TOTAL["<<i<<"]-0.5*(0.0";
+          for( j=0;j<this->NSPECS;j++){
+             map<string,int>::iterator it = this->FSPES[j].atoms.find("H");
+             if(it != this->FSPES[j].atoms.end()){
+                fout<<"+"<<it->second<<"*Y["<<j<<"]";
+                count=++count%countMax;
+                if(count==0) fout<<"\n      ";   
+             }
+          }
+          fout << ");\n";
+      }
+      else if(SPECI=="e-"){
+          count = 1;
+          fout << "   Y["<<N<<"]=TOTAL["<<i<<"]";
+          for( j=0; j<this->NSPECS;j++){
+             if(this->FSPES[j].ESPEC > 0)
+                fout<<"+"<< this->FSPES[j].ESPEC<<"*Y["<<j<<"]";
+             else if(this->FSPES[j].ESPEC < 0)
+                fout<<this->FSPES[j].ESPEC<<"*Y["<<j<<"]";
+             if(this->FSPES[j].ESPEC!=0){
+                count=++count%countMax;
+               if(count==0) fout<<"\n      "; 
+             }
+          }
+          fout<<";\n";
+      }
+   }
+
+   map<string, int> smap;
+   for(int i=0;i<this->NSPECS+this->NCONS;i++){
+      string SPECI =  this->FSPES[i].SPECI;
+      string PHASE =  this->FSPES[i].PHASE;
+      if(PHASE == "") smap.insert(map<string,int>::value_type(SPECI,i));
+      else smap.insert(map<string,int>::value_type(SPECI+"_"+PHASE,i));
+   }
+
+
+
+  int initN = 0;
+  for(int id=0; id<1+this->NDUST;id++){
+   int NSPES, NCONS,NDSS;
+   UModel::_SPES SPES;
+   UModel::_REAC REAC;
+   UModel::_DSS  DSS;
+   if(id==0){
+      SPES = this->GAS.SPES;
+      REAC = this->GAS.REAC;
+      NSPES = this->GAS.NSPES;
+      NCONS = tis->GAS.NCONS;
+   }else{
+      initN += NSPES;
+      SPES = this->DUST[id-1].SPES;
+      REAC = this->DUST[id-1].REAC;
+      DSS = this->DUST[id-1].DSS;
+      NSPES = this->DUST[id-1].NSPES;
+      NCONS = tis->DUST[id-1].NCONS;      
+      NDSS  = this->DUST[id-1].NDSS;
+   }
+
+   for( i=0; NSPECS;i++){
+      count = 1;
+      fout << "   F=0.0";
+      for(auto j : FSPES[i].Os){
+         string SPECI1 = REAC[j].R[0];
+         string SPECI2 = REAC[j].R[1];
+         if ((it=smap.find(SPECI1))!=smap.end()) r1 = it->second;
+         if ((it=smap.find(SPECI2))!=smap.end()) r2 = it->second;
+         if(this->FREAC[j].type == 1 || this->FREAC[j].type == 2 || this->FREAC[j].type == 3 )
+            fout << "+K["<<j<<"]*Y["<<r1<<"]";
+         else fout << "+K["<<j<<"]*Y["<<r1<<"]*Y["<<r2<<"]*nH";
+         count=++count%countMax;
+         if(count==0) fout<<"\n      ";
+      }
+      fout <<";\n";
+
+      count = 1;
+      fout << "   D=0.0";
+      for(auto j : this->FSPES[i].Is){
+         string SPECI1 = this->FREAC[j].R[0];
+         string SPECI2 = this->FREAC[j].R[1];
+         if(this->FSPES[i].PHASE != ""){
+            SPECI1 = SPECI1+"_"+this->FSPES[i].PHASE;
+            SPECI2 = SPECI2+"_"+this->FSPES[i].PHASE;
+         }
+         if ((it=smap.find(SPECI1))!=smap.end()) r1 = it->second;
+         if ((it=smap.find(SPECI2))!=smap.end()) r2 = it->second;
+         if(REAC[j].type == 1 || REAC[j].type == 2 || REAC[j].type == 3 )
+            fout << "+K["<<j<<"]*Y["<<r1<<"]";
+         else fout << "+K["<<j<<"]*Y["<<r1<<"]*Y["<<r2<<"]*nH";
+         count=++count%countMax;
+         if(count==0) fout<<"\n      ";     
+      }
+      fout <<";\n";
+      fout <<"   YDOT["<<i<<"]=F-D";
+      if(this->FSPES[i].PHASE==""){//gas phase
+         for(int j=0; j<this->NDUST;j++){
+            map<string,int>::iterator it = smap.find(this->FSPES[i].SPECI+"_"+this->DUST[j].name);
+            int k = -1;
+            while(++k<this->DUST[j].NDSS)
+               if(this->DUST[j].DSS[k].SPECI == this->FSPES[i].SPECI) break;
+            if(it != smap.end() and k<this->DUST[j].NDSS){
+               fout<<"-ACC["<<j<<"]["<<k<<"]*"<<"Y["<<i<<"]";
+               fout<<"+DCC["<<j<<"]["<<k<<"]*"<<"Y["<<it->second<<"]";
+            }
+
+         }
+      }else{
+         int NDust=-1,NDss=-1,Nspe=-1;
+         while(++NDust<this->NDUST) if(this->DUST[NDust].name == this->FSPES[i].PHASE) break;
+         while(++NDss<this->DUST[NDust].NDSS) if(this->DUST[NDust].DSS[NDss].SPECI ==  this->FSPES[i].SPECI) break;
+         map<string,int>::iterator it = smap.find(this->FSPES[i].SPECI);
+         if(NDust<this->NDUST and NDss<this->DUST[NDust].NDSS and it!=smap.end()){
+            fout<<"+ACC["<<NDust<<"]["<<NDss<<"]*Y["<<it->second<<"]";
+            fout<<"-DCC["<<NDust<<"]["<<NDss<<"]*Y["<<i<<"]";
+         } 
+      }
+      fout<<";\n";
+   }
+  }
+
+  fout<<"}";
+}
+
 bool UModel::initYDOT() throw(UException){
-   for (int i=0; i < this->NREAC;i++)
-      for(int j=0; j<6; j++)
-         if(this->REAC[i].R[j]<this->NSPECS+this->NCONS)
-            if(j<2) this->SPES[this->REAC[i].R[j]].Is.push_back(i);
-            else this->SPES[this->REAC[i].R[j]].Os.push_back(i);
+   map<string, int> smap;
+   for(int i=0;i<this->NSPECS+this->NCONS;i++){
+      string SPECI =  this->FSPES[i].SPECI;
+      string PHASE =  this->FSPES[i].PHASE;
+      if(PHASE == "") smap.insert(map<string,int>::value_type(SPECI,i));
+      else smap.insert(map<string,int>::value_type(SPECI+"_"+PHASE,i));
+   }
+
+   int type;
+   for (int i=0; i < this->NREAC;i++){
+      type = this->FREAC[i].type;
+      if(type != 10){
+         for(int j=0; j<6;j++){
+            string SPECI = this->FREAC[i].R[j];
+            if( ( j==1 and (type==1 or type==2 or type == 3) ) or SPECI=="");
+            else{
+               map<string,int>::iterator it = smap.find(SPECI);
+               if(it != smap.end() ){
+                  if(j<2) this->FSPES[it->second].Is.push_back(i);
+                  else    this->FSPES[it->second].Os.push_back(i);
+               }
+            }
+         }
+      }else{
+         for(int j=0; j<6;j++){
+            string SPECI = this->FREAC[i].R[j];
+            for(int k=0; k<this->NDUST;k++ ){
+               SPECI = SPECI+"_"+this->DUST[k].name;
+               map<string,int>::iterator it = smap.find(SPECI);
+               if(it != smap.end() ){
+                  if(j<2) this->FSPES[it->second].Is.push_back(i);
+                  else    this->FSPES[it->second].Os.push_back(i);
+               }
+            }
+         }
+      }
+   }
 }
 
 bool UModel::createYDOTFile(string s) throw(UException){
@@ -230,6 +517,7 @@ bool UModel::createYDOTFile(string s) throw(UException){
    string SPECI;
    int N, i,j,r1,r2;
    int count, countMax=6;
+   map<string,int>::iterator it;
    if(!fout) throw UException("can not open: "+s);
    fout << "#include\"UModel.h\"\n";
    fout << "#include<string.h>\n";
@@ -245,13 +533,13 @@ bool UModel::createYDOTFile(string s) throw(UException){
    
    for(i=0; i<this->NCONS;i++){
       N = this->NSPECS+i;
-      SPECI = this->SPES[N].SPECI;
+      SPECI = this->FSPES[N].SPECI;
       if (SPECI=="H2"){
           count = 1;
           fout << "   Y["<<N<<"]=TOTAL["<<i<<"]-0.5*(0.0";
           for( j=0;j<this->NSPECS;j++){
-             map<string,int>::iterator it = this->SPES[j].atoms.find("H");
-             if(it != this->SPES[j].atoms.end()){
+             map<string,int>::iterator it = this->FSPES[j].atoms.find("H");
+             if(it != this->FSPES[j].atoms.end()){
                 fout<<"+"<<it->second<<"*Y["<<j<<"]";
                 count=++count%countMax;
                 if(count==0) fout<<"\n      ";   
@@ -263,11 +551,11 @@ bool UModel::createYDOTFile(string s) throw(UException){
           count = 1;
           fout << "   Y["<<N<<"]=TOTAL["<<i<<"]";
           for( j=0; j<this->NSPECS;j++){
-             if(this->SPES[j].ESPEC > 0)
-                fout<<"+"<< this->SPES[j].ESPEC<<"*Y["<<j<<"]";
-             else if(this->SPES[j].ESPEC < 0)
-                fout<<this->SPES[j].ESPEC<<"*Y["<<j<<"]";
-             if(this->SPES[j].ESPEC!=0){
+             if(this->FSPES[j].ESPEC > 0)
+                fout<<"+"<< this->FSPES[j].ESPEC<<"*Y["<<j<<"]";
+             else if(this->FSPES[j].ESPEC < 0)
+                fout<<this->FSPES[j].ESPEC<<"*Y["<<j<<"]";
+             if(this->FSPES[j].ESPEC!=0){
                 count=++count%countMax;
                if(count==0) fout<<"\n      "; 
              }
@@ -275,13 +563,28 @@ bool UModel::createYDOTFile(string s) throw(UException){
           fout<<";\n";
       }
    }
+
+   map<string, int> smap;
+   for(int i=0;i<this->NSPECS+this->NCONS;i++){
+      string SPECI =  this->FSPES[i].SPECI;
+      string PHASE =  this->FSPES[i].PHASE;
+      if(PHASE == "") smap.insert(map<string,int>::value_type(SPECI,i));
+      else smap.insert(map<string,int>::value_type(SPECI+"_"+PHASE,i));
+   }
+
    for( i=0; i<this->NSPECS;i++){
       count = 1;
       fout << "   F=0.0";
-      for(auto j : this->SPES[i].Os){
-         r1 = this->REAC[j].R[0];
-         r2 = this->REAC[j].R[1];
-         if(this->REAC[j].type == 1 || this->REAC[j].type == 2 || this->REAC[j].type == 3 )
+      for(auto j : this->FSPES[i].Os){
+         string SPECI1 = this->FREAC[j].R[0];
+         string SPECI2 = this->FREAC[j].R[1];
+         if(this->FSPES[i].PHASE != ""){
+            SPECI1 = SPECI1+"_"+this->FSPES[i].PHASE;
+            SPECI2 = SPECI2+"_"+this->FSPES[i].PHASE;
+         }
+         if ((it=smap.find(SPECI1))!=smap.end()) r1 = it->second;
+         if ((it=smap.find(SPECI2))!=smap.end()) r2 = it->second;
+         if(this->FREAC[j].type == 1 || this->FREAC[j].type == 2 || this->FREAC[j].type == 3 )
             fout << "+K["<<j<<"]*Y["<<r1<<"]";
          else fout << "+K["<<j<<"]*Y["<<r1<<"]*Y["<<r2<<"]*nH";
          count=++count%countMax;
@@ -291,17 +594,46 @@ bool UModel::createYDOTFile(string s) throw(UException){
 
       count = 1;
       fout << "   D=0.0";
-      for(auto j : this->SPES[i].Is){
-         r1 = this->REAC[j].R[0];
-         r2 = this->REAC[j].R[1];
-         if(this->REAC[j].type == 1 || this->REAC[j].type == 2 || this->REAC[j].type == 3 )
+      for(auto j : this->FSPES[i].Is){
+         string SPECI1 = this->FREAC[j].R[0];
+         string SPECI2 = this->FREAC[j].R[1];
+         if(this->FSPES[i].PHASE != ""){
+            SPECI1 = SPECI1+"_"+this->FSPES[i].PHASE;
+            SPECI2 = SPECI2+"_"+this->FSPES[i].PHASE;
+         }
+         if ((it=smap.find(SPECI1))!=smap.end()) r1 = it->second;
+         if ((it=smap.find(SPECI2))!=smap.end()) r2 = it->second;
+         if(this->FREAC[j].type == 1 || this->FREAC[j].type == 2 || this->FREAC[j].type == 3 )
             fout << "+K["<<j<<"]*Y["<<r1<<"]";
          else fout << "+K["<<j<<"]*Y["<<r1<<"]*Y["<<r2<<"]*nH";
          count=++count%countMax;
          if(count==0) fout<<"\n      ";     
       }
       fout <<";\n";
-      fout <<"   YDOT["<<i<<"]=F-D;\n";
+      fout <<"   YDOT["<<i<<"]=F-D";
+      if(this->FSPES[i].PHASE==""){//gas phase
+         for(int j=0; j<this->NDUST;j++){
+            map<string,int>::iterator it = smap.find(this->FSPES[i].SPECI+"_"+this->DUST[j].name);
+            int k = -1;
+            while(++k<this->DUST[j].NDSS)
+               if(this->DUST[j].DSS[k].SPECI == this->FSPES[i].SPECI) break;
+            if(it != smap.end() and k<this->DUST[j].NDSS){
+               fout<<"-ACC["<<j<<"]["<<k<<"]*"<<"Y["<<i<<"]";
+               fout<<"+DCC["<<j<<"]["<<k<<"]*"<<"Y["<<it->second<<"]";
+            }
+
+         }
+      }else{
+         int NDust=-1,NDss=-1,Nspe=-1;
+         while(++NDust<this->NDUST) if(this->DUST[NDust].name == this->FSPES[i].PHASE) break;
+         while(++NDss<this->DUST[NDust].NDSS) if(this->DUST[NDust].DSS[NDss].SPECI ==  this->FSPES[i].SPECI) break;
+         map<string,int>::iterator it = smap.find(this->FSPES[i].SPECI);
+         if(NDust<this->NDUST and NDss<this->DUST[NDust].NDSS and it!=smap.end()){
+            fout<<"+ACC["<<NDust<<"]["<<NDss<<"]*Y["<<it->second<<"]";
+            fout<<"-DCC["<<NDust<<"]["<<NDss<<"]*Y["<<i<<"]";
+         } 
+      }
+      fout<<";\n";
    }
 
    fout<<"}";
@@ -315,75 +647,6 @@ void UModel::ODESOLVER(){
          );
 }
 
-inline double UModel::K(int i, double Temp, double AV){
-   int type, TR=0;
-   double ALF, BET, GAM, ZETA;
-   double DTMIN,DT;
-
-   TR = 0;
-   DTMIN = 1.E100;
-   if(this->REAC[i].NTR>1)
-      for(int j=0; j<this->REAC[i].NTR ;j++){
-         if(this->REAC[i].TINT[j] >= Temp && this->REAC[i].TINT[j]<Temp){
-            TR = j;
-            break;
-         }
-         DT = min(  abs(this->REAC[i].TINT[j]-Temp),  abs(this->REAC[i].TEND[j]-Temp));
-         if (DT < DTMIN){
-            TR = j;
-            DTMIN = DT;
-         }
-      }
-   ALF = this->REAC[i].ALF[TR];
-   BET = this->REAC[i].BET[TR];
-   GAM = this->REAC[i].GAM[TR];
-
-   //if(this->REAC[i].TINT[0]>30 and this->REAC[i].GAM < 0) return 0.;
-
-   if(this->REAC[i].type == 1)  //COSMIC RAY PARTICLE RATE
-      return ALF * this->ZETA;
-   else if(this->REAC[i].type == 2) //COSMIC RAY PHOTO-RATE
-      return ALF * pow(Temp/300.0,BET)* GAM * this->ZETA/(1.0-this->ALBEDO);
-   else if(this->REAC[i].type == 3) //PHOTO-REACTION RATE 
-      return ALF*exp(-GAM*AV);
-   else if(this->REAC[i].type == 10){
-      return 0.0;
-   }else
-      return ALF*pow(Temp/300.0,BET)*exp(-GAM/Temp);
-
-
-}
-
-inline double UModel::AV(double NH){
-   return NH/1.87E21;  //see MNRAS 467,699
-}
-
-inline double UModel::AUV(double NH){
-   return 4.7*this->AV(NH);  //see MNRAS 467,699
-}
-
-inline double UModel::NH(double t){
-   return 4.675e+21*2;  //to value AV as 5
-}
-
-inline double UModel::nH(double t){
-   return 5.0E4;
-}
-
-inline double UModel::Temp(double t){
-   return 10.0;
-}
-
-void UModel::RATES(double t){
-   this->TCV.t      = t;
-   this->TCV.NH     = this->NH(t);
-   this->TCV.AV = this->AV(this->TCV.NH);
-   this->TCV.Temp   = this->Temp(t);
-   this->TCV.nH    = this->nH(t);
-   for(int i=0;i<this->NREAC;i++) this->TCV.K[i] = this->K(i,this->TCV.Temp,this->TCV.AV);
-}
-
-
 void FAKEDIF(int* N,double* T,double *Y, double *YDOT, double *RPAR, int*IPAR){   
    for(int i=0; i<*N;i++) YDOT[i]=0; cout<<"callback\n";
 }
@@ -394,7 +657,7 @@ void FAKEJAC(int*, double*, double*, int*, int*, double*, int*, double*, int*){
 bool UModel::run(){
    int NTOT = this->NSPECS;
    this->ODEPAR.Y = this->Y;
-   this->ODEPAR.DIF = YDOT;
+   this->ODEPAR.DIF = DIFF; //YDOTF; //
    this->ODEPAR.JAC = FAKEJAC;
    this->ODEPAR.NEQ = NTOT;    
    this->ODEPAR.LIW =   NTOT + 30    +100;
@@ -422,7 +685,7 @@ bool UModel::run(){
  
    ofstream fout("Uout.csv");
    fout << "TIME,";
-   for(int j=0; j<this->NSPECS+this->NCONS;j++) fout << this->SPES[j].SPECI<<",";
+   for(int j=0; j<this->NSPECS+this->NCONS;j++) fout << this->FSPES[j].SPECI+(this->FSPES[j].PHASE==""?"":"_"+this->FSPES[j].PHASE)<<",";
    fout<<endl;
    for(int i=1;i<=dex;i++){
       fout << this->times[i]<<",";
@@ -434,30 +697,12 @@ bool UModel::run(){
 }
 
 bool UModel::test(){
-   cout << this->NSPECS << endl;
-   for(int i=0;i<this->NSPECS+this->NCONS;i++){
-      cout <<  this->SPES[i].SPECI<<'\t'<<this->SPES[i].MSPEC<<'\t'<< this->SPES[i].ESPEC <<"\t";
-      cout << this->SPES[i].Is.size()<<"\t"<<this->SPES[i].Os.size()<<endl;
-      for(map<string,int>::iterator it=this->SPES[i].atoms.begin(); it!=this->SPES[i].atoms.end();it++)
-         cout << it->first <<"\t"<< it->second<<"\t";
-      cout<<endl;
-   }
-/*
-   for(int i=0;i<this->NREAC;i++){
-      if(this->REAC[i].TINT[0]>30 && this->REAC[i].GAM[0]<0.0){
-        cout<<i<<":   "<<this->REAC[i].type<<":   ";
-        for(int j=0;j<6;j++) cout<< this->REAC[i].R[j]<<":";
-        cout << "    ";
-        for(int j=0;j<this->REAC[i].NTR;j++){
-          cout << this->REAC[i].ALF[j]<<" "<<this->REAC[i].BET[j]<<" "<<this->REAC[i].GAM[j]<<" ";
-          cout <<this->REAC[i].TINT[j]<<" "<<this->REAC[i].TEND[j]<<" ";
-        }
-        cout<<endl;
-      }
-   }
-*/
-   
+   for(int i=0; i<this->NDUST;i++)
+      for(int j=0; j<this->DUST[i].NSPES;j++)
+         cout << this->DUST[i].SPES[j].SPECI<<"\t"
+              << this->DUST[i].SPES[j].Eb<<"\t"
+              << this->DUST[i].SPES[j].Is.size()<<"\t"
+              << this->DUST[i].SPES[j].Os.size()<<"\t"
+              <<endl;     
    return true;
 }
-
-

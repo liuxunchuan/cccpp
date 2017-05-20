@@ -1,7 +1,6 @@
 #include"UModel.h"
 #include<string.h>
-#include<iostream>
-void YDOTF(int* N,double* T,double *Y, double *YDOT, double *RPAR, int*IPAR){
+void YDOT(int* N,double* T,double *Y, double *YDOT, double *RPAR, int*IPAR){
    UModel *ptr;
    ::memcpy(&ptr,IPAR,4);
    ::memcpy(((void*)(&ptr))+4,((void*)(IPAR))+4,4);
@@ -10,8 +9,6 @@ void YDOTF(int* N,double* T,double *Y, double *YDOT, double *RPAR, int*IPAR){
    double *K,F,D;
     K = ptr->TCV.K;
    ptr->RATES(*T);
-   auto ACC = ptr->ACC;
-   auto DCC = ptr->DCC;
    Y[761]=TOTAL[0]-0.5*(0.0+1*Y[0]+1*Y[1]+1*Y[2]+2*Y[3]+3*Y[4]
       +1*Y[7]+1*Y[11]+1*Y[12]+1*Y[13]+2*Y[14]+2*Y[15]
       +3*Y[18]+3*Y[19]+1*Y[20]+1*Y[21]+4*Y[22]+4*Y[23]

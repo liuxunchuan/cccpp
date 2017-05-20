@@ -49,28 +49,17 @@ public:
    map<string,double> ATOMS;
 
    double initTime;
-   int NSPECS=0, NCONS=0,NPAR=0;
-   double TOTAL[10],X[10];      
-   struct _SPES{
-      string SPECI;
-      double MSPEC;
-      double ESPEC;
-      vector<int> Is;
-      vector<int> Os;
-      map<string, int > atoms;
-   };
-
-   _SPES * SPES;
 
    int  NREAC=0;
    //int *NTR;
    //double (*RATES)[5][5]=NULL;
 
    /** @breif reactions recoeder */
-   struct _REAC{
+   class _FREAC{
+   public:
       bool good;  ///< if false, subpress this reaction
       int type;   ///< reaction type. 1-3 for photon/particle ionization. 10 for grain surface reaction.
-      int R[6];   ///< R[0] R[1] record reactants index in SPES, R[2]-R[5] for resultants.
+      string R[6];   ///< R[0] R[1] record reactants index in SPES, R[2]-R[5] for resultants.
       int NTR;    
       double ALF[5];
       double BET[5];
@@ -78,8 +67,78 @@ public:
       double TINT[5];
       double TEND[5];
    };
+   _FREAC * FREAC;
+   class _REAC: public _FREAC{
+   public:
+      int Ri[6];
+   };
 
-   _REAC * REAC;
+   int NSPECS=0, NCONS=0,NPAR=0;
+   double TOTAL[10],X[10];    
+   class _FSPES{
+   public:
+      string SPECI;
+      string PHASE;
+      double MSPEC;
+      double ESPEC;
+      vector<int> Is;
+      vector<int> Os;
+      map<string, int > atoms;
+   };
+   _FSPES * FSPES;
+   typedef _FSPES _SPES;
+   //typedef _SPES _DSPES;
+   class _DSPES:public _FSPES{
+   public:
+      double Eb;
+      int i1=1;
+      int i2=1;
+   };
+
+   int  NDSS; ///<number of dust surface species
+   class _FDSS{
+   public:
+      string SPECI;
+      double Eb; ///< binding energy, Eb (K).
+      double M;
+      double E;
+      int i1=1; ///< if 0, do not include accretion of this specie
+      int i2=1; ///< if 0, do not include decretion of this specie 
+   };
+   _FDSS * FDSS;
+   typedef _FDSS _DSS;
+
+   int NDUST;
+   class _DUST{ ///< dust
+   public:
+      string name; 
+      double dust_gas_ratio = 0.01;
+      double radius = 100; //A
+      double grainradius = 0; //A
+      int NDSS;
+      _DSS * DSS;
+      int  NSPES;
+      _DSPES * SPES;
+      int NREAC;
+      _REAC * REAC;
+   };
+   _DUST *DUST;
+
+   class _GAS{ ///<gas
+   public:
+      int  NSPES,NCONS;
+      _SPES * SPES;
+      int NREAC;
+      _REAC * REAC; 
+   };
+   _GAS GAS;
+
+
+
+   double (* ACC)[1000];
+   double (* DCC)[1000];
+
+
 
    struct _TCV{
       double t;
@@ -149,9 +208,13 @@ public:
    * @endcode
    * @pre fspecs exist under search path, default "./"
    */
-   bool initSPECS(string fspecs) throw(UException); ///< read species to be take into acount, and set initial abuandance.
+   bool readSPECS(string fspecs) throw(UException); ///< read species to be take into acount, and set initial abuandance.
+   bool readDSS(string f) throw(UException);
+   bool readRATES(string fratea) throw(UException); ///< read reaction rate file 
+   bool initGAS();
+   bool initDUST(int N=1);
    bool initATOMS();
-   bool initRATES(string fratea) throw(UException); ///< read reaction rate file 
+   bool initDOT();
    bool initYDOT() throw(UException); ///< relate each specie(s) to reaction(s).
    bool createYDOTFile(string s) throw(UException);///< create file "Uode.cpp", which contain defination of YDOT(...)
 
@@ -170,5 +233,8 @@ public:
    bool test();
    ~UModel();
 };
+
+void DIFF(int* N,double* T,double *Y, double *YDOT, double *RPAR, int*IPAR);
+void YDOTF(int* N,double* T,double *Y, double *YDOT, double *RPAR, int*IPAR);
 
 #endif
