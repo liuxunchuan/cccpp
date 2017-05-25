@@ -2,13 +2,12 @@
 #include<string.h>
 void YDOT(int* N,double* T,double *Y, double *YDOT, double *RPAR, int*IPAR){
    UModel *ptr;
-   ::memcpy(&ptr,IPAR,4);
-   ::memcpy(((void*)(&ptr))+4,((void*)(IPAR))+4,4);
+   ::memcpy(&ptr,IPAR,8);
    double *TOTAL=ptr->TOTAL;
-   double nH = ptr->TCV.nH;
    double *K,F,D;
     K = ptr->TCV.K;
    ptr->RATES(*T);
+   double nH = ptr->TCV.nH;
    Y[761]=TOTAL[0]-0.5*(0.0+1*Y[0]+1*Y[1]+1*Y[2]+2*Y[3]+3*Y[4]
       +1*Y[7]+1*Y[11]+1*Y[12]+1*Y[13]+2*Y[14]+2*Y[15]
       +3*Y[18]+3*Y[19]+1*Y[20]+1*Y[21]+4*Y[22]+4*Y[23]
