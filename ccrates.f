@@ -1,0 +1,145 @@
+CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+C  SUBROUTINE TO CALCULATE THE RATE COEFFICIENTS (K)  C
+CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+
+      SUBROUTINE RATES(RADIUS)
+      DOUBLE PRECISION Y(1000),K(10000),ALF(10000,5),BET(10000,5),
+     *   GAM(10000,5),TLOWER(10000,5),TUPPER(10000,5),TOTAL(10),X(10),
+     *   RAD,AUV,H2COL,TEMP,ZETA,ALBEDO,GAMCO,ACCR,HNR,X_G,A_G,MLOSS,V,
+     *   RADIUS,PI,MH,MU,KB,DTMIN,DT,AUV_AV
+      DOUBLE PRECISION DACC(1000),DDCC(1000), BIND(1000,5)
+      DOUBLE PRECISION GETHNR,GETTEM,GETH2,GETAUV,GETRAD,GETCOR,EARG
+      INTEGER RTYPE(10000),NTR(10000),NREAC,ICO,ICOR,TR,I,J
+      INTEGER   NPERIAD,PERIAD
+      DOUBLE PRECISION PERIADS(0:100)
+      COMMON/BL1/ K,X,TOTAL,ACCR,HNR
+      COMMON/BL2/ MLOSS,V
+      COMMON/BL3/ Y,X_G,A_G,ZETA,ALBEDO,GAMCO,AUV_AV,ICO
+      COMMON/BL4/ ALF,BET,GAM,TLOWER,TUPPER,RTYPE,NTR,NREAC,ICOR
+      COMMON/BLC/ PI,MH,MU,KB
+      COMMON/BLDU/ DACC,DDCC,BIND,NBIND
+      COMMON/BTIME/ NPERIAD,PERIAD,PERIADS
+      COMMON/INDEXS/ ISS, ISO2,IS_B,ISO2_B
+
+
+C  H2 NUMBER DENSITY
+      HNR = GETHNR(RADIUS)
+C  TEMPERATURE
+      TEMP = GETTEM(RADIUS)
+C  H2 COLUMN DENSITY
+      H2COL = GETH2(RADIUS,HNR)
+C  RADIAL UV EXTINCTION
+      AUV = GETAUV(H2COL)
+C  RADIATION FIELD STRENGTH
+      RAD = GETRAD(AUV)
+
+C  H-ATOM ACCRETION RATE
+      ACCR = 0.3*PI*(A_G**2.0)*HNR*X_G*(8.0*KB*TEMP/(PI*MH))**0.5
+
+
+C  *****CALCULATE REACTION RATES****************************************
+
+      DO J=1,NREAC
+
+C  DETERMINE TEMPERATURE RANGE FOR RATE COEFFICIENTS
+
+C  INITIALISE TEMPERATURE RANGE INDEX
+         TR = 1
+C  IF MULTIPLE TEMP RANGES, FIND THE CLOSEST MATCH TO CURRENT TEMP.
+         IF(NTR(J).GT.1) THEN
+            DTMIN = 1.0E20
+            DO I = 1,NTR(J)
+               IF(TEMP.GE.TLOWER(J,I).AND.TEMP.LT.TUPPER(J,I)) THEN
+                  TR = I
+                  GO TO 201
+               ELSE
+                  DT = ABS(TLOWER(J,I)-TEMP)
+                  IF(ABS(TUPPER(J,I)-TEMP).LT.DT) THEN
+                     DT = ABS(TUPPER(J,I)-TEMP)
+                  END IF
+                  IF(DT.LT.DTMIN) THEN
+                     DTMIN = DT
+                     TR = I
+                  END IF
+               END IF
+            END DO
+         END IF
+
+
+C  COMPUTE RATE COEFFICIENTS BASED ON REACTION TYPE
+
+C  COSMIC RAY PARTICLE RATE
+ 201  IF(RTYPE(J).EQ.1) THEN
+      K(J) = ALF(J,TR)*ZETA
+
+C  COSMIC RAY PHOTO-RATE
+      ELSE IF(RTYPE(J).EQ.2) THEN
+      K(J) = ZETA*ALF(J,TR)*((TEMP/300.0)**BET(J,TR))*GAM(J,TR)
+     *   /(1.0-ALBEDO)
+      
+C  PHOTO-REACTION RATE 
+C  光致电离
+      ELSE IF(RTYPE(J).EQ.3) THEN
+      K(J) = RAD*ALF(J,TR)*EARG((GAMCO-GAM(J,TR))*(AUV/AUV_AV))
+C      K(J) = RAD*ALF(J,TR)*EARG((-GAM(J,TR))*(AUV/AUV_AV))
+C     K(J) = 1E-15 
+C  表面反应
+C  see:  APJs 82 167
+C  R = exp(-4pi(a/h)(2mE_a)^0.5) * (2 ns E_D/pi^2 m)^0.5/Ns e^(-E_b/kT) /nd.
+C  其中 E_b ~ E_D/3, E_b 是 binding energy(束缚能)
+C  E_a 是反应的势垒， ns是尘埃表面穴位密度， Ns是单个尘埃表面穴位总数
+C  a 是穴位间壁厚 ～1Am, h是plank常数, nd是dust数密度
+
+      ELSE IF(RTYPE(J).EQ.10) THEN
+      IB1 = BET(J,TR)
+      IB2 = BET(J,TR)
+      K(J) = (2.54E-6)**((BIND(IB1,2)*ALF(J,TR)/1000)**0.5)
+     * *1.58E12*(BIND(IB1,1)/100/BIND(IB1,2))**0.5
+     * /(HNR*X_G)*MAX(
+     *                (4.54E-5)**(BIND(IB1,1)/3./100/(TEMP/10.))
+     *                -(4.54E-5)**(BIND(IB1,1)/100./(TEMP/10.)),
+     *                0.0170**(sqrt(BIND(IB1,1)/3./100*(BIND(IB1,2))))
+     *               )
+C    K(J) =0.0
+
+C  DEFAULT BINARY REACTION RATE
+      ELSE
+      K(J) = ALF(J,TR)*((TEMP/300.0)**BET(J,TR))*EARG(-GAM(J,TR)/TEMP)
+      END IF
+
+C     去除一些反应
+C     IF (J.eq.5298) K(J)=0.0
+
+C 210  PRINT*,"K (",J,") = ",K(J),ALF(J,TR),BET(J,TR),GAM(J,TR)
+      END DO
+
+C  SET CO PHOTODISSOCIATION RATE
+C     二氧化碳光致电离
+C     K(ICOR) = GETCOR(H2COL,Y(ICO),V,AUV)
+
+
+      DO J=1,NBIND
+C     DACC: MNRAS 244,432
+      DACC(J) = 1.44E-5*0.5*(TEMP/10.0/BIND(J,2))**0.5
+     * *X_G*HNR
+C    * *(1+13*BIND(J,3)*A_G/1.0E-5)*X_G*HNR
+      IF (BIND(J,4).eq.0) DACC(J) = 0.0
+      IF (BIND(J,3).LT.0) DACC(J) = 0.0
+      DDCC(J) = 1E12*(BIND(J,1)/100.0/BIND(J,2))**0.5
+     * *EARG(-BIND(J,1)/TEMP)
+      IF (BIND(J,5).eq.0) DDCC(J) = 0.0
+      END DO
+c     400K 1000K
+      IF(PERIAD.EQ.NPERIAD) THEN
+      DACC(IS_B) = 1.44E-5*0.5*(10.00/10.0/BIND(IS_B,2))**0.5
+     * *X_G*HNR
+      DDCC(IS_B) = 1E12*(BIND(IS_B,1)/100.0/BIND(IS_B,2))**0.5
+     * *EARG(-BIND(IS_B,1)/10.00)
+      DACC(ISO2_B) = 1.44E-5*0.5*(10.00/10.0/BIND(ISO2_B,2))**0.5
+     * *X_G*HNR
+      DDCC(ISO2_B) = 1E12*(BIND(ISO2_B,1)/100.0/BIND(ISO2_B,2))**0.5
+     * *EARG(-BIND(ISO2_B,1)/10.00)
+      END IF
+
+      RETURN
+      END
