@@ -219,7 +219,6 @@ public:
    bool initGAS();
    bool initDUST(int N=1);
    bool initATOMS();
-   bool initDOT();
    bool createDOTFile(string s);
    bool initYDOT() throw(UException); ///< relate each specie(s) to reaction(s).
    bool createYDOTFile(string s) throw(UException);///< create file "Uode.cpp", which contain defination of YDOT(...)

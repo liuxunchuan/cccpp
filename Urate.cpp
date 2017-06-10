@@ -80,56 +80,65 @@ void UModel::RATES(double t){
 
 void DIFF(int* N,double* T,double *Y, double *YDOT, double *RPAR, int*IPAR){
    UModel *ptr;
-   ::memcpy(&ptr,IPAR,4);
-   ::memcpy(((void*)(&ptr))+4,((void*)(IPAR))+4,4);
+   ::memcpy(&ptr,IPAR,8);
    double *TOTAL=ptr->TOTAL;
-   double nH = ptr->TCV.nH;
    double *K,F,D;
     K = ptr->TCV.K;
+   double nH = ptr->TCV.nH;
    ptr->RATES(*T);
 
-   int Ns = ptr->GAS.NSPES;
-   int Ni=-1;
+  int r1,r2,NTOTAL=*N, NDUST=ptr->NDUST;
 
-   for(int i=0; i<Ns;i++){
-      Ni=i;
-      YDOT[i] = 0;
-      continue;
-      for(int rx : ptr->GAS.SPES[i].Is){
-
-         int r1 = ptr->GAS.REAC[rx].Ri[0];
-         int r2 = ptr->GAS.REAC[rx].Ri[1];
-         //cout <<Ni<<'\t' <<rx <<'\t'<<ptr->GAS.REAC[rx].type<< '\t'<<r1<<'\t'<<r2<<endl;
-         if(r1==Ns) r1=*N;
-         if(r1==Ns+1) r1=(*N)+1;
-         if(r2==Ns) r2=*N;
-         if(r2==Ns+1) r2=(*N)+1;
-         if( ptr->GAS.REAC[rx].type!=0){
-            YDOT[i] -= K[rx]*Y[r1];
-         }
-         else{
-            YDOT[i] -= K[rx]*Y[r1]*Y[r2]*nH;
-         }
+  int initN = 0, initRN = 0;
+  for(int id=0; id<1+NDUST;id++){
+   int NSPES, NCONS,NDSS,NREAC;
+   UModel::_SPES* SPES;
+   UModel::_REAC* REAC;
+   UModel::_DSS*  DSS;
+   if(id==0){
+      SPES = (UModel::_SPES*)(ptr->GAS.SPES);
+      REAC = ptr->GAS.REAC;
+      NSPES = ptr->GAS.NSPES;
+      NCONS = ptr->GAS.NCONS;
+      NREAC = ptr->GAS.NREAC;
+      
+   }else{
+      initN += NSPES;
+      initRN += NREAC;
+      SPES = (UModel::_SPES*)(ptr->DUST[id-1].SPES);
+      REAC = ptr->DUST[id-1].REAC;
+      DSS = ptr->DUST[id-1].DSS;
+      NSPES = ptr->DUST[id-1].NSPES;
+      NCONS = 0;      
+      NDSS  = ptr->DUST[id-1].NDSS;
+      NREAC = ptr->DUST[id-1].NREAC;
+   }
+   for( int i=0; i<NSPES;i++){
+      YDOT[i+initN] = 0;
+      for(auto j : SPES[i].Os){
+         r1 = REAC[j].Ri[0];
+         if(r1!=9999 && r1>=NSPES)
+            if(r1<NSPES+NCONS) r1= r1-NSPES+NTOTAL;
+         r2 = REAC[j].Ri[1];
+         if(r2!=9999 && r2>=NSPES)
+            if(r2<NSPES+NCONS) r2= r2-NSPES+NTOTAL;
+         if(REAC[j].type == 1 || REAC[j].type == 2 || REAC[j].type == 3 )
+            YDOT[i+initN]+=K[j+initRN]*Y[r1+initN];
+         else YDOT[i+initN]+= K[j+initRN]*Y[r1+initN]*Y[r2+initN]*nH;  
       }
-      for(int rx : ptr->GAS.SPES[i].Os){
-         int r1 = ptr->GAS.REAC[rx].Ri[0];
-         int r2 = ptr->GAS.REAC[rx].Ri[1];
-         if(r1==Ns) r1=*N;
-         if(r1==Ns+1) r1=(*N)+1;
-         if(r2==Ns) r2=*N;
-         if(r2==Ns+1) r2=(*N)+1;
-         if( ptr->GAS.REAC[rx].type!=0)
-            YDOT[i] +=  K[rx]*Y[r1];
-         else
-            YDOT[i] += K[rx]*Y[r1]*Y[r2]*nH;
+      for(auto j : SPES[i].Is){
+         r1 = REAC[j].Ri[0];
+         if(r1!=9999 && r1>=NSPES)
+            if(r1<NSPES+NCONS) r1= r1-NSPES+NTOTAL;
+         r2 = REAC[j].Ri[1];
+         if(r2!=9999 && r2>=NSPES)
+            if(r2<NSPES+NCONS) r2= r2-NSPES+NTOTAL;
+         if(REAC[j].type == 1 || REAC[j].type == 2 || REAC[j].type == 3 )
+            YDOT[i+initN]-=K[j+initRN]*Y[r1+initN];
+         else YDOT[i+initN]-= K[j+initRN]*Y[r1+initN]*Y[r2+initN]*nH;  
       }
    }
-   while(++Ni<(*N)) YDOT[Ni]=0;
-
-   //for(int i=0; i<600;i++)if(YDOT[i]>1.E-15) YDOT[i]=1.E-15;
-   //for(int i=0; i<600;i++)if(YDOT[i]<-1.E-15)YDOT[i]=1.E-15;
-   //for(int i=0; i<600;i++)if(YDOT[i]==0.)  YDOT[i]=1.E-15;
-   //for(int i=0; i<600;i++)if(YDOT[i] != 1.E-15) cout<<"crazy!"<<endl;
+  }
 
    Y[*N]=TOTAL[0]-0.5*(0.0+1*Y[0]+1*Y[1]+1*Y[2]+2*Y[3]+3*Y[4]
       +1*Y[7]+1*Y[11]+1*Y[12]+1*Y[13]+2*Y[14]+2*Y[15]

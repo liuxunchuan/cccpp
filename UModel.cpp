@@ -251,6 +251,18 @@ bool UModel::initGAS(){
          N++;
       }
    this->GAS.NREAC = N;
+
+   for(int i=0; i<this->GAS.NREAC;i++)
+      if(this->GAS.REAC[i].good)
+         for(int j=0;j<6;j++)
+            if(this->GAS.REAC[i].Ri[j]!=9999)
+               if(j<2)this->GAS.SPES[this->GAS.REAC[i].Ri[j]].Is.push_back(i);
+               else this->GAS.SPES[this->GAS.REAC[i].Ri[j]].Os.push_back(i);
+
+   for(int i=0; i<this->GAS.NCONS;i++){
+      
+
+   }
 }
 
 bool UModel::initDUST(int N){
@@ -305,23 +317,13 @@ bool UModel::initDUST(int N){
             N++;
          }
       this->DUST[i].NREAC = N;
-   }
-}
 
-bool UModel::initDOT(){
-   for(int i=0; i<this->GAS.NREAC;i++)
-      if(this->GAS.REAC[i].good)
+      for(int k=0; k<this->DUST[i].NREAC;k++)
+       if(this->DUST[i].REAC[k].good)
          for(int j=0;j<6;j++)
-            if(this->GAS.REAC[i].Ri[j]!=9999)
-               if(j<2)this->GAS.SPES[this->GAS.REAC[i].Ri[j]].Is.push_back(i);
-               else this->GAS.SPES[this->GAS.REAC[i].Ri[j]].Os.push_back(i);
-   for(int k=0; k<this->NDUST;k++){
-    for(int i=0; i<this->DUST[k].NREAC;i++)
-      if(this->DUST[k].REAC[i].good)
-         for(int j=0;j<6;j++)
-            if(this->DUST[k].REAC[i].Ri[j]!=9999)
-               if(j<2)this->DUST[k].SPES[this->DUST[k].REAC[i].Ri[j]].Is.push_back(i);
-               else this->DUST[k].SPES[this->DUST[k].REAC[i].Ri[j]].Os.push_back(i);   
+            if(this->DUST[i].REAC[k].Ri[j]!=9999)
+               if(j<2)this->DUST[i].SPES[this->DUST[i].REAC[k].Ri[j]].Is.push_back(k);
+               else this->DUST[i].SPES[this->DUST[i].REAC[k].Ri[j]].Os.push_back(k);  
    }
 }
 
@@ -336,13 +338,12 @@ bool UModel::createDOTFile(string s){
    fout << "#include<string.h>\n";
    fout << "void YDOT(int* N,double* T,double *Y, double *YDOT, double *RPAR, int*IPAR){\n";
    fout << "   UModel *ptr;\n";
-   fout << "   ::memcpy(&ptr,IPAR,4);\n";
-   fout << "   ::memcpy(((void*)(&ptr))+4,((void*)(IPAR))+4,4);\n";
+   fout << "   ::memcpy(&ptr,IPAR,8);\n";
    fout << "   double *TOTAL=ptr->TOTAL;\n";
-   fout << "   double nH = ptr->TCV.nH;\n";
    fout << "   double *K,F,D;\n";
    fout <<"    K = ptr->TCV.K;\n";
    fout << "   ptr->RATES(*T);\n";
+   fout << "   double nH = ptr->TCV.nH;\n";
 
    for(i=0; i<this->NCONS;i++){
       N = this->NSPECS+i;
@@ -507,8 +508,7 @@ bool UModel::createYDOTFile(string s) throw(UException){
    fout << "#include<string.h>\n";
    fout << "void YDOT(int* N,double* T,double *Y, double *YDOT, double *RPAR, int*IPAR){\n";
    fout << "   UModel *ptr;\n";
-   fout << "   ::memcpy(&ptr,IPAR,4);\n";
-   fout << "   ::memcpy(((void*)(&ptr))+4,((void*)(IPAR))+4,4);\n";
+   fout << "   ::memcpy(&ptr,IPAR,8);\n";
    fout << "   double *TOTAL=ptr->TOTAL;\n";
    fout << "   double nH = ptr->TCV.nH;\n";
    fout << "   double *K,F,D;\n";
@@ -622,7 +622,7 @@ bool UModel::createYDOTFile(string s) throw(UException){
       fout<<";\n";
    }
 
-   fout<<"}";
+   fout<<"}"; 
 }
 
 void UModel::ODESOLVER(){
@@ -643,7 +643,7 @@ void FAKEJAC(int*, double*, double*, int*, int*, double*, int*, double*, int*){
 bool UModel::run(){
    int NTOT = this->NSPECS;
    this->ODEPAR.Y = this->Y;
-   this->ODEPAR.DIF = DIFF; //YDOTF; //
+   this->ODEPAR.DIF = YDOTF; //
    this->ODEPAR.JAC = FAKEJAC;
    this->ODEPAR.NEQ = NTOT;
    this->ODEPAR.LIW =   NTOT + 30    +100;
@@ -653,8 +653,7 @@ bool UModel::run(){
    this->ODEPAR.IPAR  = new int[10];
 
    unsigned long int pt = (unsigned long int)(this);
-   ::memcpy(this->ODEPAR.IPAR, &pt, 4);
-   ::memcpy( ((void *)(this->ODEPAR.IPAR))+4, ((void*)(&pt))+4, 4);
+   ::memcpy(this->ODEPAR.IPAR, &pt, 8);
 
    double TINIT=3.15576E9, TFINAL=3.15576E14;
    this->ODEPAR.T = TINIT;
@@ -683,20 +682,10 @@ bool UModel::run(){
 }
 
 bool UModel::test(){
-/*
-   for(int i=0; i<this->NDUST;i++)
-      for(int j=0; j<this->DUST[i].NSPES;j++){
-         cout<<j<<"\t"<<this->DUST[i].SPES[j].Os.size()<<"\t";
-         for(int k=0; k<this->DUST[i].SPES[j].Os.size();k++)
-            cout<<this->DUST[i].SPES[j].Os[k]<<"\t";
-         cout<<endl<<endl; 
-      }
- */
-      for(int j=0; j<this->GAS.NSPES;j++){
-         cout<<j<<"\t"<<this->GAS.SPES[j].Os.size()<<"\t";
-         for(int k=0; k<this->GAS.SPES[j].Os.size();k++)
-            cout<<this->GAS.SPES[j].Os[k]<<"\t";
-         cout<<endl<<endl; 
-      }
+   cout << this->NSPECS <<endl;
+   int N=this->GAS.NSPES;
+   for(int i=0;i<this->NDUST;i++)
+      N+=this->DUST[i].NSPES;
+   cout << N <<endl;
    return true;
 }

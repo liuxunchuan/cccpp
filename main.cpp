@@ -12,13 +12,12 @@ int main(){
    u.initATOMS();
    u.initGAS(); 
    u.initDUST();
-
-   u.initDOT();
+   u.createDOTFile("temp1.cpp");
    u.initYDOT();
-   //u.createDOTFile("temp1.cpp");
+
    //u.createYDOTFile("temp.cpp");
-   //u.test();
-   u.run();
+   u.test();
+   //u.run();
    //for(int i=0; i<u.NSPECS;i++) cout<< u.Y[i]<<endl;
    //return 0;
 }
