@@ -147,6 +147,8 @@ public:
       double Temp;
       double nH;
       double *K;
+      double *ACC;
+      double *DCC;
    };
 
    _TCV TCV;
@@ -190,6 +192,9 @@ public:
       int MF = 22;
       int *IPAR = NULL;
       double *RPAR = NULL;
+      double H0= 0;
+      double HMAX = 0;
+      double HMIN = 0;
    };
    _ODEPAR ODEPAR;
 

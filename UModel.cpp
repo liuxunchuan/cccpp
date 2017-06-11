@@ -69,13 +69,17 @@ UModel::UModel(){
    this->DCC  = new double[10][1000];
    this->abuns = new double[1000][1000];
    this->TCV.K = new double[10000];
+   this->TCV.ACC = new double[10000];
+   this->TCV.DCC = new double[10000];
 }
 
 UModel::~UModel(){
    delete [] this->FSPES;
    delete [] this->FREAC;
    delete this->abuns;
-
+   delete this->TCV.K;
+   delete this->TCV.ACC;
+   delete this->TCV.DCC;
 }
 
 bool UModel::readSPECS(string s)  throw(UException){
@@ -332,6 +336,7 @@ bool UModel::createDOTFile(string s){
    string SPECI;
    int N, i,j,r1,r2;
    int count, countMax=6;
+   int initN, initRN;
    map<string,int>::iterator it;
    if(!fout) throw UException("can not open: "+s);
    fout << "#include\"UModel.h\"\n";
@@ -340,11 +345,56 @@ bool UModel::createDOTFile(string s){
    fout << "   UModel *ptr;\n";
    fout << "   ::memcpy(&ptr,IPAR,8);\n";
    fout << "   double *TOTAL=ptr->TOTAL;\n";
-   fout << "   double *K,F,D;\n";
-   fout <<"    K = ptr->TCV.K;\n";
+   fout << "   double *K,F,D,*ACC,*DCC;\n";
    fout << "   ptr->RATES(*T);\n";
+   fout << "   K = ptr->TCV.K;\n";
+   fout << "   ACC = ptr->TCV.ACC;\n";
+   fout << "   DCC = ptr->TCV.DCC;\n";
    fout << "   double nH = ptr->TCV.nH;\n";
 
+  int NTOTAL=this->GAS.NSPES;
+  for(int i=0;i<this->NDUST;i++)
+     NTOTAL+=this->DUST[i].NSPES;
+
+  /**
+  将species排序
+  */
+  map<string, int> smap;
+  initN = 0; initRN = 0;
+  for(int id=0; id<1+this->NDUST;id++){  
+   int NSPES, NCONS,NDSS,NREAC;
+   UModel::_SPES* SPES;
+   UModel::_REAC* REAC;
+   UModel::_DSS*  DSS;
+   if(id==0){
+      SPES = (UModel::_SPES*)(this->GAS.SPES);
+      NSPES = this->GAS.NSPES;
+      NCONS = this->GAS.NCONS;
+      
+   }else{
+      initN += NSPES;
+      SPES = (UModel::_SPES*)(this->DUST[id-1].SPES);
+      NSPES = this->DUST[id-1].NSPES;
+      NCONS = 0;      
+   }
+       
+   for(int i=0;i<NSPECS+NCONS;i++){
+      string SPECI =  SPES[i].SPECI;
+      string PHASE =  SPES[i].PHASE;
+      if(PHASE == "") smap.insert(map<string,int>::value_type(SPECI,i+initN));
+      else smap.insert(map<string,int>::value_type(SPECI+"_"+PHASE,i+initN));
+   }
+   for(int i=0; i<NCONS; i++){
+      string SPECI =  SPES[i+NSPES].SPECI;
+      string PHASE =  SPES[i+NSPES].PHASE;
+      smap.insert(map<string,int>::value_type(SPECI,i+NTOTAL));
+   }
+  }
+
+
+  /**
+  生成相应文件
+  */
    for(i=0; i<this->NCONS;i++){
       N = this->NSPECS+i;
       SPECI = this->FSPES[N].SPECI;
@@ -377,14 +427,10 @@ bool UModel::createDOTFile(string s){
           fout<<";\n";
       }
    }
-
-  int NTOTAL=this->GAS.NSPES;
-  for(int i=0;i<this->NDUST;i++)
-     NTOTAL+=this->DUST[i].NSPES;
   
   cout << NTOTAL<<" "<<1+this->NDUST<<endl;
 
-  int initN = 0, initRN = 0;
+  initN = 0; initRN = 0;
   for(int id=0; id<1+this->NDUST;id++){
    int NSPES, NCONS,NDSS,NREAC;
    UModel::_SPES* SPES;
@@ -450,6 +496,24 @@ bool UModel::createDOTFile(string s){
       }
       fout <<";\n";
       fout <<"   YDOT["<<i+initN<<"]=F-D";
+      //fout<<";\n";
+      if(id>0){
+         map<string,int>::iterator it = smap.find(SPES[i].SPECI);
+         if (it != smap.end()){
+            fout<<"+ACC["<<i+initN<<"]*Y["<<it->second<<"]";
+            fout<<"-DCC["<<i+initN<<"]*Y["<<i+initN<<"]";
+         }else{
+            cout <<"no gas species "<<SPES[i].SPECI <<endl;
+         }
+      }else{
+         for(j=0; j<this->NDUST;j++){
+            map<string,int>::iterator it = smap.find(SPES[i].SPECI+"_"+this->DUST[j].name);
+            if(it != smap.end()){
+               fout<<"-ACC["<<it->second<<"]*Y["<<i<<"]";
+               fout<<"+DCC["<<it->second<<"]*Y["<<it->second<<"]";
+            }
+         }
+      }
       fout<<";\n";
    }
   }
@@ -643,13 +707,17 @@ void FAKEJAC(int*, double*, double*, int*, int*, double*, int*, double*, int*){
 bool UModel::run(){
    int NTOT = this->NSPECS;
    this->ODEPAR.Y = this->Y;
-   this->ODEPAR.DIF = DIFF; //
+   this->ODEPAR.DIF = YDOTF; //
    this->ODEPAR.JAC = FAKEJAC;
    this->ODEPAR.NEQ = NTOT;
    this->ODEPAR.LIW =   NTOT + 30    +100;
    this->ODEPAR.IWORK = new int[this->ODEPAR.LIW];
+   for(int i=0; i<this->ODEPAR.LIW;i++) this->ODEPAR.IWORK[i] = 0;
    this->ODEPAR.LRW = 22 + (9*NTOT) + (2*(NTOT*NTOT));
    this->ODEPAR.RWORK = new double[this->ODEPAR.LRW];
+   for(int i=0; i<this->ODEPAR.LRW;i++) this->ODEPAR.RWORK[i] = 0;
+   //设置最小步长
+   this->ODEPAR.RWORK[6] = 0;
    this->ODEPAR.IPAR  = new int[10];
 
    unsigned long int pt = (unsigned long int)(this);
@@ -666,8 +734,8 @@ bool UModel::run(){
       this->ODEPAR.TOUT*=1.02;
       for(int i=0; i<this->NSPECS+this->NCONS;i++)this->abuns[i][dex] = this->ODEPAR.Y[i];
       this->times[dex] = this->ODEPAR.T;
-   }
- 
+   }  
+
    ofstream fout("Uout.csv");
    fout << "TIME,";
    for(int j=0; j<this->NSPECS+this->NCONS;j++) fout << this->FSPES[j].SPECI+(this->FSPES[j].PHASE==""?"":"_"+this->FSPES[j].PHASE)<<",";
@@ -679,6 +747,8 @@ bool UModel::run(){
       }
       fout<<endl;
    }
+
+   cout <<"succeed!\n"; 
 }
 
 bool UModel::test(){

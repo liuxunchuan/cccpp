@@ -133,13 +133,17 @@ void DIFF(int* N,double* T,double *Y, double *YDOT, double *RPAR, int*IPAR){
    ::memcpy(&ptr,IPAR,8);
    double *TOTAL=ptr->TOTAL;
    double *K,F,D;
-    K = ptr->TCV.K;
-   double nH = ptr->TCV.nH;
    ptr->RATES(*T);
+   double nH = ptr->TCV.nH;
+   K = ptr->TCV.K;
 
-  int r1,r2,NTOTAL=*N, NDUST=ptr->NDUST;
+  int r1,r2,NTOTAL, NDUST;
+  int initN, initRN;
+  
 
-  int initN = 0, initRN = 0;
+  NTOTAL = *N;
+  NDUST=ptr->NDUST;
+  initN=0; initRN=0;
   for(int id=0; id<1+NDUST;id++){
    int NSPES, NCONS,NDSS,NREAC;
    UModel::_SPES* SPES;
@@ -193,15 +197,10 @@ void DIFF(int* N,double* T,double *Y, double *YDOT, double *RPAR, int*IPAR){
   int static itt = -1;
   itt = (itt+1)%1000;
   if(itt==0){
-     int record = 0;
-     double maxd = 0.;
-     for(int i=0; i<NTOTAL;i++){
-        if (abs(YDOT[i]) > maxd){
-           maxd = abs(YDOT[i]);
-           record = i;
-        }
-     }
-     cout << "max  "<<record<<"   "<<maxd<<endl; 
+     cout << *T << "\t";
+     for(int jj=0; jj<9; jj++)
+        cout<<YDOT[jj]<<"\t";
+     cout << endl; 
   }
 
 
