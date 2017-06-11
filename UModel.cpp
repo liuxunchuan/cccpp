@@ -283,7 +283,7 @@ bool UModel::initDUST(int N){
                *((UModel::_FSPES *)(this->DUST[i].SPES+N)) = this->FSPES[j];// be careful about copy of vector/map number!
                this->DUST[i].SPES[N].Eb = 9999.0;
                this->DUST[i].SPES[N].i1 = 0;
-               this->DUST[i].SPES[N].i2 = 0;;
+               this->DUST[i].SPES[N].i2 = 0;
                N++;
                continue;
             }
@@ -643,7 +643,7 @@ void FAKEJAC(int*, double*, double*, int*, int*, double*, int*, double*, int*){
 bool UModel::run(){
    int NTOT = this->NSPECS;
    this->ODEPAR.Y = this->Y;
-   this->ODEPAR.DIF = YDOTF; //
+   this->ODEPAR.DIF = DIFF; //
    this->ODEPAR.JAC = FAKEJAC;
    this->ODEPAR.NEQ = NTOT;
    this->ODEPAR.LIW =   NTOT + 30    +100;

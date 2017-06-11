@@ -9,43 +9,93 @@ inline double UModel::K(int i, double Temp, double AV){
    double DTMIN,DT;
    TR = 0;
    DTMIN = 1.E100;
-   if(this->FREAC[i].NTR>1)
-      for(int j=0; j<this->FREAC[i].NTR ;j++){
-         if(this->FREAC[i].TINT[j] >= Temp && this->FREAC[i].TINT[j]<Temp){
+
+   int initN = 0;
+   int DUSTNUM = -1;
+   int NDUST = this->NDUST;
+   UModel::_REAC * REAC;
+   UModel::_SPES * SPES;
+
+   if(i>=this->GAS.NREAC){
+      initN = this->GAS.NREAC;
+      for(int k=0; k<NDUST;k++){
+         if(i<initN+this->DUST[k].NREAC){
+            DUSTNUM = k;
+            break;
+         }else{
+            initN += this->DUST[k].NREAC;
+         }
+      }
+   }
+
+   if(DUSTNUM>-1){ //不是gas
+      i -= initN;
+      REAC = this->DUST[DUSTNUM].REAC;
+      SPES = this->DUST[DUSTNUM].SPES;
+   }else{
+      REAC = this->GAS.REAC;
+      SPES = this->GAS.SPES;
+   }
+
+   
+   if(REAC[i].NTR>1)
+      for(int j=0; j<REAC[i].NTR ;j++){
+         if(REAC[i].TINT[j] >= Temp && REAC[i].TINT[j]<Temp){
             TR = j;
             break;
          }
-         DT = min(  abs(this->FREAC[i].TINT[j]-Temp),  abs(this->FREAC[i].TEND[j]-Temp));
+         DT = min(  abs(REAC[i].TINT[j]-Temp),  abs(REAC[i].TEND[j]-Temp));
          if (DT < DTMIN){
             TR = j;
             DTMIN = DT;
          }
       }
-   ALF = this->FREAC[i].ALF[TR];
-   BET = this->FREAC[i].BET[TR];
-   GAM = this->FREAC[i].GAM[TR];
+   ALF = REAC[i].ALF[TR];
+   BET = REAC[i].BET[TR];
+   GAM = REAC[i].GAM[TR];
 
-   //if(this->FREAC[i].TINT[0]>30 and this->FREAC[i].GAM < 0) return 0.;
+   //if(REAC[i].TINT[0]>30 and REAC[i].GAM < 0) return 0.;
     
-   if(this->FREAC[i].type == 1)  //COSMIC RAY PARTICLE RATE
+   if(REAC[i].type == 1)  //COSMIC RAY PARTICLE RATE
       return ALF * this->ZETA;
-   else if(this->FREAC[i].type == 2) //COSMIC RAY PHOTO-RATE
+   else if(REAC[i].type == 2) //COSMIC RAY PHOTO-RATE
       return ALF * pow(Temp/300.0,BET)* GAM * this->ZETA/(1.0-this->ALBEDO);
-   else if(this->FREAC[i].type == 3) //PHOTO-REACTION RATE 
+   else if(REAC[i].type == 3) //PHOTO-REACTION RATE 
       return ALF*exp(-GAM*AV);
-   else if(this->FREAC[i].type == 10){
-      //  see:  APJs 82 167
-      //  R = exp(-4pi(a/h)(2mE_a)^0.5) * (2 ns E_D/pi^2 m)^0.5/Ns e^(-E_b/kT) /nd.
-      return 0;
-      //int Ndust = i;
-      //double M = 0;
-      return  0.0*pow(2.5264E-6,sqrt(this->FSPES[(int)(BET)].MSPEC*ALF))*1.58E12;
+   else if(REAC[i].type == 10){
+
+
+//  K(J) = RAD*ALF(J,TR)*EARG((-GAM(J,TR))*(AUV/AUV_AV))
+//  K(J) = 1E-15 
+//  表面反应
+//  see:  APJs 82 167
+//  R = exp(-4pi(a/h)(2mE_a)^0.5) * (2 ns E_D/pi^2 m)^0.5/Ns e^(-E_b/kT) /nd.
+//  其中 E_b ~ E_D/3, E_b 是 binding energy(束缚能)
+//  E_a 是反应的势垒， ns是尘埃表面穴位密度， Ns是单个尘埃表面穴位总数
+//  a 是穴位间壁厚 ～1Am, h是plank常数, nd是dust数密度
+
+      int IB1 = REAC[i].Ri[0];
+      int IB2 = REAC[i].Ri[0];
+      double m1  = SPES[IB1].MSPEC;
+      double m2  = SPES[IB2].MSPEC;
+      double Ea  = ALF;
+      double Eb1 = SPES[IB1].Eb;
+      double Eb2 = SPES[IB2].Eb;
+      //return 0;
+      return pow( 2.54E-6, sqrt(m1*Ea/1000))
+             *1.58E12*sqrt(Eb1/100/m1)
+             /this->TCV.nH*max(
+                     pow(4.54E-5,Eb1/3./100/(Temp/10.))
+                     -pow(4.54E-5,Eb1/100./(Temp/10.)),
+                     pow(0.0170,sqrt(Eb1/3./100*m1))
+                     );
+
    }else
       return ALF*pow(Temp/300.0,BET)*exp(-GAM/Temp);
 }
 
 inline double UModel::AV(double NH){
-   return NH/1.87E21*2  *0;  //see MNRAS 467,699
+   return NH/1.87E21*2 ;  //see MNRAS 467,699
 }
 
 inline double UModel::AUV(double NH){
@@ -139,6 +189,21 @@ void DIFF(int* N,double* T,double *Y, double *YDOT, double *RPAR, int*IPAR){
       }
    }
   }
+
+  int static itt = -1;
+  itt = (itt+1)%1000;
+  if(itt==0){
+     int record = 0;
+     double maxd = 0.;
+     for(int i=0; i<NTOTAL;i++){
+        if (abs(YDOT[i]) > maxd){
+           maxd = abs(YDOT[i]);
+           record = i;
+        }
+     }
+     cout << "max  "<<record<<"   "<<maxd<<endl; 
+  }
+
 
    Y[*N]=TOTAL[0]-0.5*(0.0+1*Y[0]+1*Y[1]+1*Y[2]+2*Y[3]+3*Y[4]
       +1*Y[7]+1*Y[11]+1*Y[12]+1*Y[13]+2*Y[14]+2*Y[15]

@@ -1,5 +1,7 @@
 #include"UModel.h"
 #include<string.h>
+#include<iostream>
+#include<cmath>
 void YDOTF(int* N,double* T,double *Y, double *YDOT, double *RPAR, int*IPAR){
    UModel *ptr;
    ::memcpy(&ptr,IPAR,8);
@@ -6033,4 +6035,19 @@ void YDOTF(int* N,double* T,double *Y, double *YDOT, double *RPAR, int*IPAR){
    F=0.0;
    D=0.0;
    YDOT[760]=F-D;
+
+  int static itt = -1;
+  itt = (itt+1)%1000;
+  if(itt==0){
+     int record = 0;
+     double maxd = 0.;
+     for(int i=0; i<*N;i++){
+        if (abs(YDOT[i]) > maxd){
+           maxd = abs(YDOT[i]);
+           record = i;
+        }
+     }
+     std::cout << "max  "<<record<<"   "<<maxd<<std::endl; 
+  }
+
 }

@@ -1,5 +1,5 @@
 /**************************************************************************
-* Copyright 2017-5-15 Liu Xunchuan 1501110219@pku.edu.cn 
+* Copyright 2017-5-15 Liu Xunchuan  1501110219@pku.edu.cn 
 * @brief  UModel header 
 * @author Liu Xunchuan et. al.
 * @version 1.0.0.1
@@ -87,18 +87,13 @@ public:
    };
    _FSPES * FSPES;
    
-   class _SPES:public _FSPES{
-   public:
-      double _d1;
-      int _i1;
-      int _i2;
-   };
    class _DSPES:public _FSPES{
    public:
       double Eb;
       int i1=1;
       int i2=1;
    };
+   typedef _DSPES _SPES;//_SPES 有冗余，这是为了方便做出的牺牲
 
    int  NDSS; ///<number of dust surface species
    class _FDSS{
