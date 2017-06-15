@@ -131,7 +131,7 @@ public:
       _SPES * SPES;
       int NREAC;
       _REAC * REAC;
-      int IS, ISplus; 
+      int IS, ISplus, IRSph, IRH2_C2Splus; 
    };
    _GAS GAS;
 

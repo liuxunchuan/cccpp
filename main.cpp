@@ -41,6 +41,7 @@ bool UModel::run(){
       this->times[dex] = this->ODEPAR.T;
       if(this->TCV.stage<NST && this->ODEPAR.TOUT>ST[this->TCV.stage]){
         this->TCV.stage++;
+        //if(this->TCV.stage==2) this->ODEPAR.Y[this->GAS.ISplus] = 1E-10;
         cout << this->TCV.stage << " stage"<<endl;
         this->ODEPAR.ISTATE=1;
       }

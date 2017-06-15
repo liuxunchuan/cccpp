@@ -60,8 +60,12 @@ inline double UModel::K(int i, double Temp, double AV){
       return ALF * this->ZETA;
    else if(REAC[i].type == 2) //COSMIC RAY PHOTO-RATE
       return ALF * pow(Temp/300.0,BET)* GAM * this->ZETA/(1.0-this->ALBEDO);
-   else if(REAC[i].type == 3) //PHOTO-REACTION RATE 
+   else if(REAC[i].type == 3){ //PHOTO-REACTION RATE 
+      ///***  S ionization
+      if(this->TCV.stage==2 && i==this->GAS.IRSph) return ALF*exp(-GAM*2);
+      ///***
       return ALF*exp(-GAM*AV);
+   }
    else if(REAC[i].type == 10){
 
 
@@ -118,7 +122,7 @@ inline double UModel::nH(double t){
 inline double UModel::Temp(double t){
    const double year = 3.15576e+07;
    if(this->TCV.stage==2) return 60;
-   if(this->TCV.stage==1) return 60;
+   if(this->TCV.stage==1) return 50;
 
    return 15.0;
 }

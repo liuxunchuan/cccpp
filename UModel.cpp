@@ -228,8 +228,14 @@ bool UModel::initGAS(){
    int N = 0;
    this->GAS.SPES = new UModel::_SPES[1000];
    for(int i=0; i<this->NSPECS;i++)
-      if(this->FSPES[i].PHASE=="")
-         *((UModel::_FSPES*) &(this->GAS.SPES[N++])) = this->FSPES[i];
+      if(this->FSPES[i].PHASE==""){
+         *((UModel::_FSPES*) &(this->GAS.SPES[N])) = this->FSPES[i];
+         if(this->GAS.SPES[N].SPECI=="S+"){
+            this->GAS.ISplus = N;
+            cout << "IS+  "<< N <<endl;
+         }
+         N++;
+      }
    this->GAS.NSPES = N;
    this->GAS.NCONS = this->NCONS;
    for(int i=0; i<this->NCONS;i++) *((UModel::_FSPES*) &(this->GAS.SPES[N+i])) = this->FSPES[this->NSPECS+i];
@@ -238,6 +244,16 @@ bool UModel::initGAS(){
    for(int i=0; i<this->NREAC;i++)
       if(this->FREAC[i].type!=10){
          *((UModel::_FREAC *)(this->GAS.REAC+N)) = this->FREAC[i];
+         //***
+         if(this->GAS.REAC[N].type==3 && this->GAS.REAC[N].R[0]=="S"){
+            this->GAS.IRSph = N;
+            cout << "IRSph  "<<N<<endl;
+         }
+         if(this->GAS.REAC[N].type==0 && this->GAS.REAC[N].R[0]=="H2" && this->GAS.REAC[N].R[1]=="C2S+"){
+            this->GAS.IRH2_C2Splus = N;
+            cout << "IRH2_C2Splus  "<<N<<endl;
+         }
+         //***
          for(int j=0;j<6;j++){
             string SPECI = this->GAS.REAC[N].R[j];
             if((SPECI == "") or SPECI=="PHOTON" or SPECI=="CRPHOT" or SPECI=="CRP"){
