@@ -82,15 +82,15 @@ inline double UModel::K(int i, double Temp, double AV){
       double Eb1 = SPES[IB1].Eb;
       double Eb2 = SPES[IB2].Eb;
       double Ns  = 1E6;
+       double X_G  = 1.33E-12;
       //return 0;
       return pow( 2.54E-6, sqrt(m1*Ea/1000))
              *1.58E12*sqrt(Eb1/100/m1)
-             /(this->TCV.nH*this->DUST[DUSTNUM].dust_gas_ratio)
+             /(this->TCV.nH*X_G)
              /Ns*
              //max
              (
-                     pow(4.54E-5,Eb1/3./100/(Temp/10.))
-                     -pow(4.54E-5,Eb1/100./(Temp/10.))
+                     pow(4.54E-5,Eb1/100/(Temp/10.))
              //,
              //      pow(0.0170,sqrt(Eb1/3./100*m1))
              );
@@ -131,7 +131,7 @@ void UModel::RATES(double t){
    this->TCV.nH    = this->nH(t);
    for(int i=0;i<this->NREAC;i++) this->TCV.K[i] = this->K(i,this->TCV.Temp,this->TCV.AV);
 
-   double X_G  = 1E-12;
+   double X_G  = 1.33E-12;
    double Temp = this->TCV.Temp;
    int initN = this->GAS.NSPES;
    for(int i=0; i<this->NDUST;i++)
