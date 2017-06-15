@@ -81,14 +81,19 @@ inline double UModel::K(int i, double Temp, double AV){
       double Ea  = ALF;
       double Eb1 = SPES[IB1].Eb;
       double Eb2 = SPES[IB2].Eb;
+      double Ns  = 1E6;
       //return 0;
       return pow( 2.54E-6, sqrt(m1*Ea/1000))
              *1.58E12*sqrt(Eb1/100/m1)
-             /this->TCV.nH*max(
+             /(this->TCV.nH*this->DUST[DUSTNUM].dust_gas_ratio)
+             /Ns*
+             //max
+             (
                      pow(4.54E-5,Eb1/3./100/(Temp/10.))
-                     -pow(4.54E-5,Eb1/100./(Temp/10.)),
-                     pow(0.0170,sqrt(Eb1/3./100*m1))
-                     );
+                     -pow(4.54E-5,Eb1/100./(Temp/10.))
+             //,
+             //      pow(0.0170,sqrt(Eb1/3./100*m1))
+             );
 
    }else
       return ALF*pow(Temp/300.0,BET)*exp(-GAM/Temp);
@@ -103,15 +108,19 @@ inline double UModel::AUV(double NH){
 }
 
 inline double UModel::NH(double t){
-   return 4.675e+21*2;  //to value AV as 5
+   return 4.675e+21;  //to value AV as 5
 }
 
 inline double UModel::nH(double t){
-   return 5.0E4;
+   return 1E5;
 }
 
 inline double UModel::Temp(double t){
-   return 10.0;
+   const double year = 3.15576e+07;
+   if(this->TCV.stage==2) return 60;
+   if(this->TCV.stage==1) return 60;
+
+   return 15.0;
 }
 
 void UModel::RATES(double t){
@@ -121,14 +130,27 @@ void UModel::RATES(double t){
    this->TCV.Temp   = this->Temp(t);
    this->TCV.nH    = this->nH(t);
    for(int i=0;i<this->NREAC;i++) this->TCV.K[i] = this->K(i,this->TCV.Temp,this->TCV.AV);
-   for(int i=0; i<this->NDUST; i++)
-      for(int j=0; j<this->DUST[i].NDSS;j++){
-         this->ACC[i][j] = 0.;
-         this->DCC[i][j] = 0.;
+
+   double X_G  = 1E-12;
+   double Temp = this->TCV.Temp;
+   int initN = this->GAS.NSPES;
+   for(int i=0; i<this->NDUST;i++)
+      for(int j=0; j<this->DUST[i].NSPES;j++){
+         double M = this->DUST[i].SPES[j].MSPEC; 
+         double Eb = this->DUST[i].SPES[j].Eb;
+         //DACC: MNRAS 244,432
+         this->TCV.ACC[initN] = 1.44E-5*0.5*sqrt(Temp/10.0/M)*X_G*this->TCV.nH ;
+         this->TCV.DCC[initN] = 1E12*sqrt(Eb/100.0/M)*exp(-Eb/Temp);
+         if(this->DUST[i].SPES[j].i1==0) this->TCV.ACC[initN]=0;
+         if(this->DUST[i].SPES[j].i2==0) this->TCV.DCC[initN]=0;
+         //if(this->TCV.stage==2 && j==this->DUST[i].IC3S)  //特殊对待 C3S
+             //this->TCV.DCC[initN] = 1E12*sqrt(Eb/100.0/M)*exp(-Eb/100);
+         initN ++;
       }
 }
 
 void DIFF(int* N,double* T,double *Y, double *YDOT, double *RPAR, int*IPAR){
+   //还没debug好， 此函数不可使用。 请使用 Uode.cpp里的 YDOTF函数。
    UModel *ptr;
    ::memcpy(&ptr,IPAR,8);
    double *TOTAL=ptr->TOTAL;

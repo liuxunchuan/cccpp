@@ -115,6 +115,7 @@ public:
       double dust_gas_ratio = 0.01;
       double radius = 100; //A
       double grainradius = 0; //A
+      int ISO2, IS, IC3S;
       int NDSS;
       _DSS * DSS;
       int  NSPES;
@@ -129,7 +130,8 @@ public:
       int  NSPES,NCONS;
       _SPES * SPES;
       int NREAC;
-      _REAC * REAC; 
+      _REAC * REAC;
+      int IS, ISplus; 
    };
    _GAS GAS;
 
@@ -142,6 +144,7 @@ public:
 
    struct _TCV{
       double t;
+      int stage = 0;
       double NH;
       double AV;
       double Temp;
