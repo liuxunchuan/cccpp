@@ -62,7 +62,7 @@ inline double UModel::K(int i, double Temp, double AV){
       return ALF * pow(Temp/300.0,BET)* GAM * this->ZETA/(1.0-this->ALBEDO);
    else if(REAC[i].type == 3){ //PHOTO-REACTION RATE 
       ///***  S ionization
-      if(this->TCV.stage==2 && i==this->GAS.IRSph) return ALF*exp(-GAM*2);
+      if(this->TCV.stage==2 && i==this->GAS.IRSph) return ALF*exp(-GAM*2)*10;
       ///***
       return ALF*exp(-GAM*AV);
    }
@@ -121,8 +121,11 @@ inline double UModel::nH(double t){
 
 inline double UModel::Temp(double t){
    const double year = 3.15576e+07;
-   if(this->TCV.stage==2) return 60;
-   if(this->TCV.stage==1) return 50;
+   if(this->TCV.stage==1)
+      if(t<2E5*year)return 50;//return (15.*(2E5*year-t)+40.*(t-1E5*year))/(2E5*year-1E5*year);
+      else return 50;
+   if(this->TCV.stage==2) return 50;
+   
 
    return 15.0;
 }
@@ -148,7 +151,7 @@ void UModel::RATES(double t){
          if(this->DUST[i].SPES[j].i1==0) this->TCV.ACC[initN]=0;
          if(this->DUST[i].SPES[j].i2==0) this->TCV.DCC[initN]=0;
          //if(this->TCV.stage==2 && j==this->DUST[i].IC3S)  //特殊对待 C3S
-             //this->TCV.DCC[initN] = 1E12*sqrt(Eb/100.0/M)*exp(-Eb/100);
+         //    this->TCV.DCC[initN] = 1E12*sqrt(Eb/100.0/M)*exp(-Eb/100);
          initN ++;
       }
 }

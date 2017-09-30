@@ -83,6 +83,10 @@ UModel::~UModel(){
 }
 
 bool UModel::readSPECS(string s)  throw(UException){
+   /**
+   读取 .spec文件，
+   将分子的基本参量保存到FSPES数组中。
+   */
    this->FSPES = new UModel::_FSPES[1000];
    ifstream fspec;
    fspec.open(s);
@@ -117,7 +121,7 @@ bool UModel::readSPECS(string s)  throw(UException){
       sin >> dex >> this->FSPES[I].SPECI >> this->TOTAL[this->NCONS] >>this->FSPES[I].MSPEC>> this->FSPES[I].ESPEC; 
       this->NCONS++;
     } 
-    if(block==2){
+    if(block==2){ //初始值
       istringstream sin(line);
       sin >> spec >> abun;
 
@@ -138,6 +142,12 @@ bool UModel::readSPECS(string s)  throw(UException){
 }
 
 bool UModel::readDSS(string f) throw(UException){
+   /**
+   将dust表面分子的基本参量保存到FDSS数组。
+   参数与FSPES基本相同，除了：
+       Eb(binding energy)
+       i1,i2 两个控制字，当i1为零时，不考虑该分子的吸附，当i2为零时不考虑该分子释放。
+   */
    this->FDSS  = new UModel::_FDSS[1000];
    ifstream fin(f);
    string line;
@@ -151,6 +161,9 @@ bool UModel::readDSS(string f) throw(UException){
 }
 
 bool UModel::readRATES(string s) throw(UException){
+   /**
+   读取反应公式的参数，保存到数组FREAC中。
+   */
    this->FREAC = new UModel::_FREAC[10000];
    ifstream frate;
    frate.open(s);
@@ -198,6 +211,9 @@ bool UModel::readRATES(string s) throw(UException){
 }
 
 bool UModel::initATOMS(){
+   /**
+   解析分子式，分析分子的各种原子数
+   */
    regex atom_regex("([A-Z][a-z]*)([0-9]*)");
    for(int i=0; i<this->NSPECS;i++){
       string SPECI = this->FSPES[i].SPECI;
@@ -225,6 +241,10 @@ bool UModel::initATOMS(){
 }
 
 bool UModel::initGAS(){
+   /**
+   初始化气相分子与反应网络。
+   将每一个分子参与的反应与该分子相连系。
+   */
    int N = 0;
    this->GAS.SPES = new UModel::_SPES[1000];
    for(int i=0; i<this->NSPECS;i++)
@@ -286,9 +306,13 @@ bool UModel::initGAS(){
 }
 
 bool UModel::initDUST(int N){
+   /**
+   初始化尘埃表面， 每一种尘埃标号为 G1,G2,G3...
+   如果.spec 文件中有后缀为_Gi的分子,则将该分子的参数(如果存在)加入到尘埃Gi中。
+   */
    this->DUST = new UModel::_DUST[N];
-   this->NDUST = N;
-   for(int i=0; i<N;i++){
+   this->NDUST = N; //注意后面的N被覆盖，不要在引用N以表示DUST种类。
+   for(int i=0; i<this->NDUST;i++){
       this->DUST[i].name = "G"+to_string(i+1);
       this->DUST[i].NDSS = this->NDSS;
       this->DUST[i].DSS = this->FDSS;
@@ -360,6 +384,9 @@ bool UModel::initDUST(int N){
 }
 
 bool UModel::createDOTFile(string s){
+   /**
+   生成DOT文件
+   */
    ofstream fout(s);
    string SPECI;
    int N, i,j,r1,r2;
@@ -406,13 +433,13 @@ bool UModel::createDOTFile(string s){
       NCONS = 0;      
    }
        
-   for(int i=0;i<NSPECS+NCONS;i++){
+   for(int i=0;i<NSPES;i++){
       string SPECI =  SPES[i].SPECI;
       string PHASE =  SPES[i].PHASE;
       if(PHASE == "") smap.insert(map<string,int>::value_type(SPECI,i+initN));
       else smap.insert(map<string,int>::value_type(SPECI+"_"+PHASE,i+initN));
    }
-   for(int i=0; i<NCONS; i++){
+   for(int i=0; i<NCONS; i++){ //只有气相时有保守保守计算的分子，有修改时应特别关照。
       string SPECI =  SPES[i+NSPES].SPECI;
       string PHASE =  SPES[i+NSPES].PHASE;
       smap.insert(map<string,int>::value_type(SPECI,i+NTOTAL));
@@ -423,12 +450,12 @@ bool UModel::createDOTFile(string s){
   /**
   生成相应文件
   */
-   for(i=0; i<this->NCONS;i++){
+   for(i=0; i<this->NCONS;i++){  //权宜之计
       N = this->NSPECS+i;
       SPECI = this->FSPES[N].SPECI;
       if (SPECI=="H2"){
           count = 1;
-          fout << "   Y["<<N<<"]=TOTAL["<<i<<"]-0.5*(0.0";
+          fout << "   Y["<<N+this->NBeforeCONS<<"]=TOTAL["<<i<<"]-0.5*(0.0";
           for( j=0;j<this->NSPECS;j++){
              map<string,int>::iterator it = this->FSPES[j].atoms.find("H");
              if(it != this->FSPES[j].atoms.end()){
@@ -441,7 +468,7 @@ bool UModel::createDOTFile(string s){
       }
       else if(SPECI=="e-"){
           count = 1;
-          fout << "   Y["<<N<<"]=TOTAL["<<i<<"]";
+          fout << "   Y["<<N+this->NBeforeCONS<<"]=TOTAL["<<i<<"]";
           for( j=0; j<this->NSPECS;j++){
              if(this->FSPES[j].ESPEC > 0)
                 fout<<"+"<< this->FSPES[j].ESPEC<<"*Y["<<j<<"]";
@@ -490,16 +517,18 @@ bool UModel::createDOTFile(string s){
       for(auto j : SPES[i].Os){
          r1 = REAC[j].Ri[0];
          if(r1!=9999 && r1>=NSPES)
-            if(r1<NSPES+NCONS) r1= r1-NSPES+NTOTAL;
+            if(r1<NSPES+NCONS) r1= r1-NSPES+NTOTAL+this->NBeforeCONS;
             else cout << "can not find specie:  "<<REAC[j].R[0]<<endl;
+         else r1 = r1+initN;
          r2 = REAC[j].Ri[1];
          if(r2!=9999 && r2>=NSPES)
-            if(r2<NSPES+NCONS) r2= r2-NSPES+NTOTAL;
+            if(r2<NSPES+NCONS) r2= r2-NSPES+NTOTAL+this->NBeforeCONS;
             else cout << "can not find specie:  "<<REAC[j].R[1]<<endl;
+         else r2 = r2+initN;
 
          if(REAC[j].type == 1 || REAC[j].type == 2 || REAC[j].type == 3 )
-            fout << "+K["<<j+initRN<<"]*Y["<<r1+initN<<"]";
-         else fout << "+K["<<j+initRN<<"]*Y["<<r1+initN<<"]*Y["<<r2+initN<<"]*nH";
+            fout << "+K["<<j+initRN<<"]*Y["<<r1<<"]";
+         else fout << "+K["<<j+initRN<<"]*Y["<<r1<<"]*Y["<<r2<<"]*nH";
          count=++count%countMax;
          if(count==0) fout<<"\n      ";
       }
@@ -510,15 +539,17 @@ bool UModel::createDOTFile(string s){
       for(auto j : SPES[i].Is){
          r1 = REAC[j].Ri[0];
          if(r1!=9999 && r1>=NSPES)
-            if(r1<NSPES+NCONS) r1= r1-NSPES+NTOTAL;
+            if(r1<NSPES+NCONS) r1= r1-NSPES+NTOTAL+this->NBeforeCONS;
             else cout << "can not find specie:  "<<REAC[j].R[0]<<endl;
+         else r1 = r1+initN;
          r2 = REAC[j].Ri[1];
          if(r2!=9999 && r2>=NSPES)
-            if(r2<NSPES+NCONS) r2= r2-NSPES+NTOTAL;
+            if(r2<NSPES+NCONS) r2= r2-NSPES+NTOTAL+this->NBeforeCONS;
             else cout << "can not find specie:  "<<REAC[j].R[1]<<endl;
+         else r2 = r2+initN;
          if(REAC[j].type == 1 || REAC[j].type == 2 || REAC[j].type == 3 )
-            fout << "+K["<<j+initRN<<"]*Y["<<r1+initN<<"]";
-         else fout << "+K["<<j+initRN<<"]*Y["<<r1+initN<<"]*Y["<<r2+initN<<"]*nH";
+            fout << "+K["<<j+initRN<<"]*Y["<<r1<<"]";
+         else fout << "+K["<<j+initRN<<"]*Y["<<r1<<"]*Y["<<r2<<"]*nH";
          count=++count%countMax;
          if(count==0) fout<<"\n      ";     
       }

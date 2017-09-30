@@ -9,7 +9,8 @@ bool UModel::run(){
    this->ODEPAR.Y = this->Y;
    this->ODEPAR.DIF = YDOTF; //
    this->ODEPAR.JAC = NULL;
-   this->ODEPAR.NEQ = NTOT;
+   this->ODEPAR.NEQ = NTOT+1; //+1 for temperature
+   this->ODEPAR.Y[NTOT]=15.;
    this->ODEPAR.LIW =   NTOT + 30    +100;
    this->ODEPAR.IWORK = new int[this->ODEPAR.LIW];
    for(int i=0; i<this->ODEPAR.LIW;i++) this->ODEPAR.IWORK[i] = 0;
@@ -73,13 +74,13 @@ int main(){
    u.initATOMS();
    u.initGAS(); 
    u.initDUST();
-   //u.createDOTFile("temp1.cpp");
+   u.createDOTFile("temp1.cpp");
+   
    //u.initYDOT();
-
    //u.createYDOTFile("temp.cpp");
    //u.test();
    //cout << "here\n";
-   u.run();
+   //u.run();
    //for(int i=0; i<u.NSPECS;i++) cout<< u.Y[i]<<endl;
    return 0;
 }

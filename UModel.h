@@ -159,7 +159,7 @@ public:
    double ZETA=1.0; /**< COSMIC-RAY IONISATION RATE SCALING FACTOR*/
    double ALBEDO=0.5; ///< GRAIN ALBEDO (FOR COSMIC-RAY-INDUCED PHOTON RATES)
 
-
+   int    NBeforeCONS = 0; //temperature
    double Y[1000]={0.0}; //abuns
 
 
