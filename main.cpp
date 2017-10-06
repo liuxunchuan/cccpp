@@ -9,13 +9,13 @@ bool UModel::run(){
    this->ODEPAR.Y = this->Y;
    this->ODEPAR.DIF = YDOTF; //
    this->ODEPAR.JAC = NULL;
-   this->ODEPAR.NEQ = NTOT+1; //+1 for temperature
-   this->ODEPAR.Y[NTOT]=15.;
-   this->ODEPAR.LIW =   NTOT + 30    +100;
+   this->ODEPAR.NEQ = NTOT+this->NBeforeCONS; //+1 for temperature
+   if(this->NBeforeCONS>0) this->ODEPAR.Y[NTOT]=15.;  //初始化温度
+   this->ODEPAR.LIW =   this->ODEPAR.NEQ + 30    +100;
    this->ODEPAR.IWORK = new int[this->ODEPAR.LIW];
    for(int i=0; i<this->ODEPAR.LIW;i++) this->ODEPAR.IWORK[i] = 0;
    this->ODEPAR.MF=22;//22
-   this->ODEPAR.LRW = 22 + (9*NTOT) + (2*(NTOT*NTOT));
+   this->ODEPAR.LRW = 22 + (9*this->ODEPAR.NEQ) + (2*(this->ODEPAR.NEQ*this->ODEPAR.NEQ));
    this->ODEPAR.RWORK = new double[this->ODEPAR.LRW];
    for(int i=0; i<this->ODEPAR.LRW;i++) this->ODEPAR.RWORK[i] = 0;
    //设置最小步长
@@ -38,7 +38,7 @@ bool UModel::run(){
       if(++dex%50==0) cout << dex<<"\t"<<"T:  "<<this->ODEPAR.T<<endl;
       this->ODESOLVER();
       this->ODEPAR.TOUT*=1.02;
-      for(int i=0; i<this->NSPECS+this->NCONS;i++)this->abuns[i][dex] = this->ODEPAR.Y[i];
+      for(int i=0; i<this->NSPECS+this->NCONS+this->NBeforeCONS;i++)this->abuns[i][dex] = this->ODEPAR.Y[i];
       this->times[dex] = this->ODEPAR.T;
       if(this->TCV.stage<NST && this->ODEPAR.TOUT>ST[this->TCV.stage]){
         this->TCV.stage++;
@@ -50,11 +50,15 @@ bool UModel::run(){
 
    ofstream fout("Uout.csv");
    fout << "TIME,";
-   for(int j=0; j<this->NSPECS+this->NCONS;j++) fout << this->FSPES[j].SPECI+(this->FSPES[j].PHASE==""?"":"_"+this->FSPES[j].PHASE)<<",";
+   for(int j=0; j<this->NSPECS;j++) fout << this->FSPES[j].SPECI+(this->FSPES[j].PHASE==""?"":"_"+this->FSPES[j].PHASE)<<",";
+   for(int j=0; j<this->NBeforeCONS; j++)
+      if(j==0) fout << "TEMP" <<",";
+      else fout << "NBefore"<<j<<",";
+   for(int j=this->NSPECS; j<this->NSPECS+this->NCONS;j++) fout << this->FSPES[j].SPECI+(this->FSPES[j].PHASE==""?"":"_"+this->FSPES[j].PHASE)<<",";
    fout<<endl;
    for(int i=1;i<=dex;i++){
       fout << this->times[i]<<",";
-      for(int j=0; j<this->NSPECS+this->NCONS;j++){
+      for(int j=0; j<this->NSPECS+this->NBeforeCONS+this->NCONS;j++){
          fout<<this->abuns[j][i]<<",";
       }
       fout<<endl;
@@ -74,13 +78,13 @@ int main(){
    u.initATOMS();
    u.initGAS(); 
    u.initDUST();
-   u.createDOTFile("temp1.cpp");
+   //u.createDOTFile("temp1.cpp");
    
    //u.initYDOT();
    //u.createYDOTFile("temp.cpp");
    //u.test();
    //cout << "here\n";
-   //u.run();
+   u.run();
    //for(int i=0; i<u.NSPECS;i++) cout<< u.Y[i]<<endl;
    return 0;
 }

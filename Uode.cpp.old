@@ -1,6 +1,6 @@
 #include"UModel.h"
 #include<string.h>
-void YDOT(int* N,double* T,double *Y, double *YDOT, double *RPAR, int*IPAR){
+void YDOTF(int* N,double* T,double *Y, double *YDOT, double *RPAR, int*IPAR){
    UModel *ptr;
    ::memcpy(&ptr,IPAR,8);
    double *TOTAL=ptr->TOTAL;

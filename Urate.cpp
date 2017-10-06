@@ -16,6 +16,8 @@ inline double UModel::K(int i, double Temp, double AV){
    UModel::_REAC * REAC;
    UModel::_SPES * SPES;
 
+   //return 0;
+
    if(i>=this->GAS.NREAC){
       initN = this->GAS.NREAC;
       for(int k=0; k<NDUST;k++){
@@ -62,7 +64,8 @@ inline double UModel::K(int i, double Temp, double AV){
       return ALF * pow(Temp/300.0,BET)* GAM * this->ZETA/(1.0-this->ALBEDO);
    else if(REAC[i].type == 3){ //PHOTO-REACTION RATE 
       ///***  S ionization
-      if(this->TCV.stage==2 && i==this->GAS.IRSph) return ALF*exp(-GAM*2)*10;
+      if(this->TCV.stage==2 && i==this->GAS.IRSph) return ALF*exp(-GAM*2);
+      //if(this->TCV.stage==1 && i==this->GAS.IRCph) return ALF*exp(-GAM*2)*(1E-6/this->Y[this->GAS.IC]);
       ///***
       return ALF*exp(-GAM*AV);
    }
@@ -86,7 +89,7 @@ inline double UModel::K(int i, double Temp, double AV){
       double Eb1 = SPES[IB1].Eb;
       double Eb2 = SPES[IB2].Eb;
       double Ns  = 1E6;
-       double X_G  = 1.33E-12;
+      double X_G  = 1.33E-12;
       //return 0;
       return pow( 2.54E-6, sqrt(m1*Ea/1000))
              *1.58E12*sqrt(Eb1/100/m1)
@@ -97,7 +100,8 @@ inline double UModel::K(int i, double Temp, double AV){
                      pow(4.54E-5,Eb1/100/(Temp/10.))
              //,
              //      pow(0.0170,sqrt(Eb1/3./100*m1))
-             );
+             )
+             *0.1;
 
    }else
       return ALF*pow(Temp/300.0,BET)*exp(-GAM/Temp);
@@ -120,15 +124,9 @@ inline double UModel::nH(double t){
 }
 
 inline double UModel::Temp(double t){
-   const double year = 3.15576e+07;
-   if(this->TCV.stage==1)
-      if(t<2E5*year)return 50;//return (15.*(2E5*year-t)+40.*(t-1E5*year))/(2E5*year-1E5*year);
-      else return 50;
-   if(this->TCV.stage==2) return 50;
-   
-
-   return 15.0;
+   return this->Y[this->NSPECS];
 }
+
 
 void UModel::RATES(double t){
    this->TCV.t      = t;
@@ -140,7 +138,7 @@ void UModel::RATES(double t){
 
    double X_G  = 1.33E-12;
    double Temp = this->TCV.Temp;
-   int initN = this->GAS.NSPES;
+   int initN = this->GAS.NSPES;  //是否赋值成功？
    for(int i=0; i<this->NDUST;i++)
       for(int j=0; j<this->DUST[i].NSPES;j++){
          double M = this->DUST[i].SPES[j].MSPEC; 
@@ -150,10 +148,19 @@ void UModel::RATES(double t){
          this->TCV.DCC[initN] = 1E12*sqrt(Eb/100.0/M)*exp(-Eb/Temp);
          if(this->DUST[i].SPES[j].i1==0) this->TCV.ACC[initN]=0;
          if(this->DUST[i].SPES[j].i2==0) this->TCV.DCC[initN]=0;
+         //std::cout<<j<<":   "<<Eb<<"\n"; 
          //if(this->TCV.stage==2 && j==this->DUST[i].IC3S)  //特殊对待 C3S
          //    this->TCV.DCC[initN] = 1E12*sqrt(Eb/100.0/M)*exp(-Eb/100);
-         initN ++;
+         initN++;
       }
+
+   const double year = 3.15576e+07;
+   double dTemp;
+   dTemp = 0;
+   if(this->TCV.stage==1)
+      if(t<1.1E5*year) dTemp = (50.0-15.0)/((1.1E5-1E5)*year) * 3.1415926/2 * sin(3.1415926* (t-1E5*year)/(1.1E5*year-1E5*year) );
+      //return (15.*(2E5*year-t)+40.*(t-1E5*year))/(2E5*year-1E5*year);
+   this->TCV.dBeforeCONS[0] = dTemp;//dTemp 
 }
 
 void DIFF(int* N,double* T,double *Y, double *YDOT, double *RPAR, int*IPAR){

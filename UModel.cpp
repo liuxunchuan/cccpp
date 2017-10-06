@@ -69,8 +69,9 @@ UModel::UModel(){
    this->DCC  = new double[10][1000];
    this->abuns = new double[1000][1000];
    this->TCV.K = new double[10000];
-   this->TCV.ACC = new double[10000];
-   this->TCV.DCC = new double[10000];
+   this->TCV.ACC = new double[10000]();
+   this->TCV.DCC = new double[10000]();
+   this->TCV.dBeforeCONS = new double[10]();
 }
 
 UModel::~UModel(){
@@ -254,6 +255,10 @@ bool UModel::initGAS(){
             this->GAS.ISplus = N;
             cout << "IS+  "<< N <<endl;
          }
+         if(this->GAS.SPES[N].SPECI=="C"){
+            this->GAS.IC = N;
+            cout << "IC  "<< N <<endl;
+         }
          N++;
       }
    this->GAS.NSPES = N;
@@ -268,6 +273,10 @@ bool UModel::initGAS(){
          if(this->GAS.REAC[N].type==3 && this->GAS.REAC[N].R[0]=="S"){
             this->GAS.IRSph = N;
             cout << "IRSph  "<<N<<endl;
+         }
+         if(this->GAS.REAC[N].type==3 && this->GAS.REAC[N].R[0]=="C"){
+            this->GAS.IRCph = N;
+            cout << "IRCph  "<<N<<endl;
          }
          if(this->GAS.REAC[N].type==0 && this->GAS.REAC[N].R[0]=="H2" && this->GAS.REAC[N].R[1]=="C2S+"){
             this->GAS.IRH2_C2Splus = N;
@@ -400,11 +409,12 @@ bool UModel::createDOTFile(string s){
    fout << "   UModel *ptr;\n";
    fout << "   ::memcpy(&ptr,IPAR,8);\n";
    fout << "   double *TOTAL=ptr->TOTAL;\n";
-   fout << "   double *K,F,D,*ACC,*DCC;\n";
+   fout << "   double *K,F,D,*ACC,*DCC,*dBeforeCONS;\n";
    fout << "   ptr->RATES(*T);\n";
    fout << "   K = ptr->TCV.K;\n";
    fout << "   ACC = ptr->TCV.ACC;\n";
    fout << "   DCC = ptr->TCV.DCC;\n";
+   fout << "   dBeforeCONS = ptr->TCV.dBeforeCONS;\n";
    fout << "   double nH = ptr->TCV.nH;\n";
 
   int NTOTAL=this->GAS.NSPES;
@@ -575,6 +585,10 @@ bool UModel::createDOTFile(string s){
       }
       fout<<";\n";
    }
+  }
+
+  for(i=0;i<this->NBeforeCONS;i++){
+      fout<<"   YDOT["<<NTOTAL+i<<"]=dBeforeCONS["<<i<<"];\n";
   }
 
   fout<<"}";

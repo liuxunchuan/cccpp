@@ -131,7 +131,7 @@ public:
       _SPES * SPES;
       int NREAC;
       _REAC * REAC;
-      int IS, ISplus, IRSph, IRH2_C2Splus; 
+      int IS, ISplus, IRSph, IC,ICplus,IRCph,IRH2_C2Splus; 
    };
    _GAS GAS;
 
@@ -152,6 +152,7 @@ public:
       double *K;
       double *ACC;
       double *DCC;
+      double *dBeforeCONS;
    };
 
    _TCV TCV;
@@ -159,7 +160,7 @@ public:
    double ZETA=1.0; /**< COSMIC-RAY IONISATION RATE SCALING FACTOR*/
    double ALBEDO=0.5; ///< GRAIN ALBEDO (FOR COSMIC-RAY-INDUCED PHOTON RATES)
 
-   int    NBeforeCONS = 0; //temperature
+   int    NBeforeCONS = 1; //temperature
    double Y[1000]={0.0}; //abuns
 
 
