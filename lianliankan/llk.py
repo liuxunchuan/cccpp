@@ -16,6 +16,8 @@ class AddOn:
    typeCode = 0
    typename = '0'
    def __init__(self):
+      self.events = []
+      self.loc = None
       pass
    def isMoveableWhenRedistributing(self):
       return True
@@ -24,10 +26,10 @@ class AddOn:
    def canOverlap(self):
       return False
 
-   acceptSignalMap = {}  #{signal1:actionFunction, ... }
+  
    
-   def acceptSignalOrNot(self, signal):
-      return signal in self.acceptSignalMap
+   def getEventSeries(self, event):
+      pass
    
 
 class Animal(AddOn):
@@ -37,13 +39,31 @@ class Animal(AddOn):
    name = '0'
    picture = None
 
-   def __init__(self,namecode):
+   def __init__(self,namecode,NEventBeforeToBeFired=1):
+      self.loc = None
       self.namecode = namecode
+      self.NEventToBeFired = NEventBeforeToBeFired
       self.name = chr(64+namecode) # 1 == A
       pass
+   
+   def setLoc(self,loc):
+      self.loc = loc   
 
    def getString(self):
       return self.name 
+
+   def getEventSeries(self,event):
+      if(event.name=='fire'):
+         if(self.NEventBeforeToBeFired>0):
+            self.NEventBeforeToBeFired = self.NEventBeforeToBeFired-1
+            if(self.NEventBeforeToBeFired==0):
+               e = event.__class__(event.name,event.mapTable,self)
+               self.events.append(e)
+               return [e,]
+         return []
+      else:
+          # to be written
+          return []
 
 class Generator:
    def __init__(self,seed,N):
@@ -186,7 +206,7 @@ class MapTable:
      self[loc].getGenerator()
 
   def getNextMove():
-     
+     pass
 
 class Viewer:
    def __init__(self, mapTable):
@@ -215,9 +235,126 @@ class Viewer:
             if(addOns != None):
                string = addOns.getString()
                plt.text(loc[0],loc[1],string)
-               
-           
-          
+       
+
+class Event:
+   def __init__(self,name,mapTable,addOns=None,loc=None,toBeActedTime=0):
+      self.name = name
+      self.mapTable = mapTable
+      self.addOns = addOns # 
+      self.loc = loc
+      self.toBeActedTime = toBeActedTime
+
+   def getLocation(self):
+      return self.loc if not self.loc else self.addOns.loc
+
+   def getLocationsAffected(self):
+      pass
+
+   def getEventSeries(self):
+      pass
+
+   def operateEvent(self):
+      if(self.addOns and self in self.addOns.events):
+         self.addOns.events.pop(self.addOns.events.index(self))
+
+class fireEvent(Event):
+   def __init__(self,mapTable,addOns=None,loc=None,toBeActedTime=1):
+      super(CommonEvent,self).__init__('fire',mapTable,addOns)
+
+   def getLocationsAffected(self):
+      pass
+
+   def getEventSeries(self):
+      (i,j) = self.getLocation()
+      for d in xrange(4):
+         ceil = mapTable[i+((d+1)%2)*(d-1),j+(d%2)*(d-2)]
+         if(ceil):
+            addOns = ceil.getAddOns()
+            return addOns.getEventSeries(self)
+   def operateEvent(self):
+      loc = self.getLocation()
+      mapTable[loc].addOns = None
+      super(fireEvent,self).operateEvent()
+
+class EventsPool:
+   def __init__(self):
+      self.eventPool = []
+
+   def isCleanEventPool(self):
+      return len(self.eventPool) == 0
+
+   def canbeActedNow(self,e):
+      # this function will not check e.toBeActedTime<=0 or not
+      # a lot to be written ...
+      pass
+
+   def fetchOneToBeActed(self):      
+      for i in xrange(len(self.eventPool)):
+         e = self.eventPool[i]
+         if e.toBeActedTime > 0:
+            return None
+         if(self.canBeActedNow(e)):
+            return self.eventPool.pop(i)
+         
+   
+   def fetchToBeActeds(self):
+      result = []
+      for i in xrange(len(self.eventPool)):
+         e = self.eventPool[i]
+         if e.toBeActedTime > 0:
+            break
+         if(self.canBeActedNow(e)):
+            result.append(self.eventPool.pop(i))
+      return result
+
+   def insertEvent(self,e):
+      self.eventPool.insert(self.findDex(e.toBeActedTime),e)
+      
+   def findDex(self,t):
+      dex = 0
+      for  i in xrange(len(self.eventPool)):
+         if self.eventPool[i].toBeActedTime <= t:
+            dex=dex+1
+         else:
+            break
+      return dex
+
+   def timeSubmitOne(self):
+      for e in self.eventPool:
+         e.toBeActedTime = e.toBeActedTime - 1
+
+   
+
+class EventHandle:
+   def __init__(self,eventPool):
+      self.eventPool = eventPool
+      pass
+
+   def eventHandle(self,event):
+      pass
+
+   def getLocationsAffected(self,event):
+      pass
+
+   def getEventsTriggered(self,Event):
+      pass
+
+   def operateEvent(self,event):
+      pass
+
+   def doEventSeries(self):
+      while(not self.isCleanEventPool()):
+         while(True):
+            event = self.eventPool.fetchOneToBeActed()
+            if(event == None):
+               break
+            es = event.getEventSeries()
+            if(es):
+               for e in es:
+                  self.eventPool.insertEvent(e)
+            event.operateEvent()        
+         self.eventPool.timeSubmitOne()
     
 def starGame():
    NRows = 10
@@ -227,22 +364,26 @@ def starGame():
    mapTable = MapTable(NRows,NCols,MapCeil)
    mapTable.initConnection()
    generator = Generator(seed,NAnimals)
-   #for j in xrange(NRows):
-   #   mapTable[0,j].setGenerator = generator
-   #for i in xrange(NRows):
-   #   for j in xrange(NCols):
-   #      mapTable[i,j].setAddOns(Animal(generator.randint()))
-
+   for j in xrange(NRows):
+      mapTable[0,j].setGenerator = generator
    for i in xrange(NRows):
       for j in xrange(NCols):
-         mapTable.arrayCallForFilledCeils.append((i,j))
-         if(i==0):
-            mapTable.arrayCanBeFilledWithnOneStepCeils.append((i,j))
-            mapTable.arrayGeneratorCeils.append((i,j))
+         animal = Animal(generator.randint())
+         mapTable[i,j].setAddOns(animal)
+         animal.setLoc = loc
+
+   #for i in xrange(NRows):
+   #   for j in xrange(NCols):
+   #      mapTable.arrayCallForFilledCeils.append((i,j))
+   #      if(i==0):
+   #         mapTable.arrayCanBeFilledWithnOneStepCeils.append((i,j))
+   #         mapTable.arrayGeneratorCeils.append((i,j))
 
    plt.clf()
    plt.ion()
    view = Viewer(mapTable)
+
+   
    view.showMap()
    view.showAddOns()
    
