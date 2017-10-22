@@ -424,7 +424,7 @@ def starGame():
    plt.pause(0.0001)
    time.sleep(0.02)
    
-   start = time.time()
+   start = time.clock()
 
    while(not eventHandle.eventPool.isCleanEventPool()):
    #for dd in xrange(3):
@@ -448,9 +448,13 @@ def starGame():
 
          eventHandle.eventPool.timeSubmitOne()
 
-   end = time.time()
+   end = time.clock()
    print end-start, 's'   
 
    return None
+
+def run():
+   while(True):
+      starGame()
 
 
